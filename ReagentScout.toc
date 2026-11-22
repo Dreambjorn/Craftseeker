@@ -1,0 +1,19 @@
+## Interface: 16001
+## Title: Reagent Scout
+## Notes: Shows what you can craft with a reagent, how to learn each recipe, and where reagents come from.
+## Author: You
+## Version: 0.1.0
+## SavedVariables: ReagentScoutDB
+## OptionalDeps: QuestieDB
+## IconTexture: Interface\Icons\INV_Misc_Bag_10
+
+Libs\embeds.xml
+
+Core.lua
+Recipes.lua
+Questie.lua
+Data.lua
+Format.lua
+Scanner.lua
+Sources.lua
+Browser.lua
