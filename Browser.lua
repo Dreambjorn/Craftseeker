@@ -14,7 +14,9 @@ local f, searchBox, title, summary, scrollBox, listEmpty
 local detail -- right-hand panel widgets
 local currentQuery, currentItem, selectedRecipe
 local collapsed = {} -- [section title] = true, kept for the session
+local expanded = {}  -- [table] = true: shown in full, until another recipe is picked
 local madeView       -- the list shows the recipes that make currentItem, not those that use it
+local TABLE_ROWS = 10
 local Render, ShowDetail
 
 local function ShowItemTooltip(self)
@@ -193,7 +195,7 @@ local function RowTooltip(self)
 end
 
 -- One table row: columns are { text, width, justify }; tip is shown on hover
-local function AddRow(columns, tip, font)
+local function AddRow(columns, tip, font, onClick)
     used.rows = used.rows + 1
     local row = pool.rows[used.rows]
     if not row then
@@ -206,11 +208,12 @@ local function AddRow(columns, tip, font)
         row.cols = {}
         row:SetScript("OnEnter", RowTooltip)
         row:SetScript("OnLeave", GameTooltip_Hide)
+        row:SetScript("OnClick", function(self) if self.onClick then self.onClick() end end)
         pool.rows[used.rows] = row
     end
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", 0, cursor)
-    row.tip = tip
+    row.tip, row.onClick = tip, onClick
     local x = 0
     for i, col in ipairs(columns) do
         local fs = row.cols[i]
@@ -260,14 +263,17 @@ local function ColumnWidths(need)
     return widths
 end
 
--- header: column titles or nil; rows: { cells = { text, ... }, tip = { line, ... } }; justify: per column
-local function AddTable(header, rows, justify)
+-- header: column titles or nil; rows: { cells = { text, ... }, tip = { line, ... } }; justify: per column.
+-- Long tables show their first rows and a button for the rest; key names the table for that button.
+local function AddTable(header, rows, justify, key)
+    local shown = #rows
+    if shown > TABLE_ROWS and not expanded[key] then shown = TABLE_ROWS end
     local need = {}
     local function Measure(cells, font)
         for i = 1, #cells do need[i] = math.max(need[i] or 0, math.ceil(TextWidth(cells[i], font)) + 13) end
     end
     if header then Measure(header, "GameFontDisable") end
-    for _, r in ipairs(rows) do Measure(r.cells, "GameFontHighlightMedium") end
+    for i = 1, shown do Measure(rows[i].cells, "GameFontHighlightMedium") end
     measure:SetText("") -- the alpha alone does not hide it
     local widths = ColumnWidths(need)
     local function Columns(cells)
@@ -276,7 +282,13 @@ local function AddTable(header, rows, justify)
         return cols
     end
     if header then AddRow(Columns(header), nil, "GameFontDisable") end
-    for _, r in ipairs(rows) do AddRow(Columns(r.cells), r.tip) end
+    for i = 1, shown do AddRow(Columns(rows[i].cells), rows[i].tip) end
+    if #rows > TABLE_ROWS then
+        AddRow({ { GOLD .. (expanded[key] and "Show fewer" or ("Show all " .. #rows)) .. "|r", DETAIL_W } }, nil, nil, function()
+            expanded[key] = not expanded[key]
+            ShowDetail(true)
+        end)
+    end
 end
 
 local function AddSlot(itemID, spellID, label)
@@ -348,7 +360,7 @@ local function AddDrops(itemID, qs)
         if e.own and e.own > 0 then tip[#tip + 1] = ("%d of those corpses are your own"):format(e.own) end
         rows[#rows + 1] = { cells = { name, e.level and tostring(e.level) or "", ZoneCell(e.zones), chance }, tip = tip }
     end
-    AddTable({ "Creature", "Level", "Zone", "Chance" }, rows, { nil, nil, nil, "RIGHT" })
+    AddTable({ "Creature", "Level", "Zone", "Chance" }, rows, { nil, nil, nil, "RIGHT" }, "drops")
     return true
 end
 
@@ -377,7 +389,7 @@ local function AddVendors(itemID, qs, heading)
         rows[#rows + 1] = { cells = { v.name, ZoneCell(v.zones), v.price },
             tip = { v.name, #v.zones > 0 and ("Zones: " .. table.concat(v.zones, ", ")) or "Zone not recorded" } }
     end
-    AddTable(nil, rows, { nil, nil, "RIGHT" })
+    AddTable(nil, rows, { nil, nil, "RIGHT" }, heading and "buy" or "vendors")
     return true
 end
 
@@ -400,7 +412,7 @@ local function AddQuests(recipeID, qs)
             tip = { q.name, q.giver and ("Given by " .. q.giver) or "Giver not recorded", q.zone and ("In " .. q.zone) or nil,
                     q.level and ("Level " .. q.level) or nil } }
     end
-    AddTable({ "Quest", "Given by", "Zone" }, rows)
+    AddTable({ "Quest", "Given by", "Zone" }, rows, nil, "quests")
     return true
 end
 
@@ -413,7 +425,7 @@ local function AddTrainers(recipeID)
     for _, t in ipairs(list) do
         rows[#rows + 1] = { cells = { t.name, t.zone or (GREY .. "unknown|r"), Money(t.copper) }, tip = { t.name, t.zone or "Zone not recorded" } }
     end
-    AddTable(nil, rows, { nil, nil, "RIGHT" })
+    AddTable(nil, rows, { nil, nil, "RIGHT" }, "trainers")
     return true
 end
 
@@ -500,7 +512,7 @@ local function AddLearn(recipeID, rec)
         for _, o in ipairs(qs.objects) do
             rows[#rows + 1] = { cells = { o.name, ZoneCell(o.zones) }, tip = { o.name, "Zones: " .. table.concat(o.zones, ", ") } }
         end
-        AddTable(nil, rows)
+        AddTable(nil, rows, nil, "objects")
         shown = true
     elseif how:find("w") then
         AddText("Found in a world object")
@@ -563,13 +575,15 @@ local function ResetDetail()
     detail.Sub:SetText("")
 end
 
-function ShowDetail()
+-- keep: a show-more button redraws the same recipe where the reader is
+function ShowDetail(keep)
+    if not keep then wipe(expanded) end
     ResetDetail()
     local rec = selectedRecipe and RS.recipes[selectedRecipe]
     local atlas = rec and rec.p and ("Professions-Recipe-Background-" .. rec.p:gsub("%s", ""))
     if not (atlas and C_Texture.GetAtlasInfo(atlas)) then atlas = "Professions-Recipe-Background" end
     detail.Background:SetAtlas(atlas)
-    detail.scroll:SetVerticalScroll(0)
+    if not keep then detail.scroll:SetVerticalScroll(0) end
     cursor = -8
     if not rec then
         AddText(
@@ -616,7 +630,7 @@ function ShowDetail()
         end
         if #seen > 0 then
             AddHeading("Where you found " .. name)
-            AddTable(nil, seen, { nil, "RIGHT" })
+            AddTable(nil, seen, { nil, "RIGHT" }, "seen")
         end
     end
     content:SetHeight(-cursor + 12)
