@@ -11,7 +11,7 @@ local defaults = {
         verified = {},             -- [profession] = { [recipeID] = true }, the full list a window showed
         counts = {},               -- [npcID] = { name, opened = corpses looted, items = { [itemID] = drops } }
         shared = {},               -- [install] = { stamp, from, counts }: other Reagent Scout users' counts
-        settings = { sources = true },
+        settings = { sources = true, share = true },
     },
 }
 
@@ -59,12 +59,16 @@ function RS:SlashCommand(input)
         print("  /rs  - open the browser")
         print("  /rs <item link, ID or name>  - look up a reagent")
         print("  /rs sources  - turn source tracking on/off")
+        print("  /rs share  - turn sharing loot counts with guild, group and friends on/off")
         print("  /rs stats  - what's been learned so far")
         print("  /rs reset  - wipe all learned data")
         print("  Alt+Click an item in your bags to look it up.")
     elseif cmd == "sources" then
         data.settings.sources = not data.settings.sources
         self:Print("source tracking", data.settings.sources and "on" or "off")
+    elseif cmd == "share" then
+        data.settings.share = not data.settings.share
+        self:Print("sharing loot counts", data.settings.share and "on" or "off")
     elseif cmd == "stats" then
         local profs = {}
         for _, rec in pairs(self.recipes) do

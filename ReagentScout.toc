@@ -16,4 +16,5 @@ Data.lua
 Format.lua
 Scanner.lua
 Sources.lua
+Share.lua
 Browser.lua

@@ -95,13 +95,46 @@ local function RecordSource(itemID, guid)
     end
 end
 
+local function NpcOf(guid)
+    if not guid or RS.IsSecret(guid) or not IsNPCGUID(guid) then return nil end
+    return tonumber((select(6, strsplit("-", guid))))
+end
+
+-- Own drop counts feed RS:GetDropRates: every corpse in a loot window counts once as opened,
+-- and reagents and recipe items count per corpse they came from
+local function CountSlot(counts, opened, slot, itemID)
+    local src = { GetLootSourceInfo(slot) }
+    for i = 1, #src, 2 do
+        local npc = NpcOf(src[i])
+        if npc then
+            local c = counts[npc]
+            if not c then
+                c = {}
+                counts[npc] = c
+            end
+            if not opened[npc] then
+                opened[npc] = true
+                c.opened = (c.opened or 0) + 1
+                c.name = c.name or guidNames[src[i]]
+            end
+            RS.data.countsStamp = time()
+            if itemID and (RS.usedIn[itemID] or RS.recipeItems[itemID]) then
+                c.items = c.items or {}
+                c.items[itemID] = (c.items[itemID] or 0) + 1
+            end
+        end
+    end
+end
+
 function Sources:LOOT_READY()
     if not Tracking() or lootCounted then return end
     lootCounted = true
     local fishing = IsFishingLoot()
+    local opened = {}
     for slot = 1, GetNumLootItems() do
         local link = GetLootSlotLink(slot)
         local itemID = link and RS.ItemIDFromText(link)
+        if not fishing then CountSlot(RS.data.counts, opened, slot, itemID) end
         if itemID and RS.usedIn[itemID] then
             if fishing then
                 Bump(Bucket(itemID, "fish"), Zone())
