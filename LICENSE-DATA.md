@@ -58,9 +58,50 @@ Attribution 4.0 (CC BY 4.0, https://creativecommons.org/licenses/by/4.0/). Chang
 rows marked trusted, only recipe items, used where Drop Tables has no rate. The Polestar authors do not
 endorse Reagent Scout.
 
+## Trainers, vendors and creature names
+
+The tables `T` and `V` in `Data.lua`, and creature names in `R`, use data from Efficient Games
+(https://efficient.games), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
+EG Link's WoW Forever trainers, vendors, NPCs and creature details,
+https://github.com/JIVESCORP/eg-link-output-wowf. Changed by Reagent Scout: merged over every client
+build, reduced to recipes, recipe items and reagents, with the cheapest price and first recorded place.
+
+## Creature places and quests
+
+The tables `Z` and `Q` in `Data.lua` hold where creatures are and which quests teach recipes, with their
+names and givers. Instance names, quest names, givers and places come from AllTheThings' WoW Forever
+database, https://github.com/ATTWoWAddon/AllTheThings (`.contrib/.db/forever`), read as text and reduced to
+those facts, under its licence:
+
+```
+MIT License
+
+Copyright (c) 2026 AllTheThings WoW Addon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+The maps players killed creatures on come from the Drop Tables shared database (CC BY-SA 4.0, see above).
+
 ## Everything else
 
-Recipe names, reagents and items come from the game client's data tables. Which recipes exist on Forever
+Recipe names, reagents, items, recipe items and automatically learned recipes come from the game client's data tables. Which recipes exist on Forever
 and how each is learned (the table `S` in `Data.lua`) come from WhatsTraining's Forever recipe files,
 https://github.com/fusionpit/WhatsTraining, under its licence:
 

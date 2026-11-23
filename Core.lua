@@ -9,13 +9,19 @@ local defaults = {
         known = { ["*"] = {} },    -- [character] = { [recipeID] = true }
         sources = {},              -- [itemID] = { vendor = {}, loot = {}, gather = {}, fish = {}, container = {} }
         verified = {},             -- [profession] = { [recipeID] = true }, the full list a window showed
+        counts = {},               -- [npcID] = { name, opened = corpses looted, items = { [itemID] = drops } }
+        shared = {},               -- [install] = { stamp, from, counts }: other Reagent Scout users' counts
         settings = { sources = true },
     },
 }
 
 -- Safe guard for secret values (combat-restricted data)
-function RS.IsSecret(v)
-    return issecretvalue and issecretvalue(v) or false
+function RS.IsSecret(...)
+    if not issecretvalue then return false end
+    for i = 1, select("#", ...) do
+        if issecretvalue((select(i, ...))) then return true end
+    end
+    return false
 end
 
 -- Forever returns "" for realm names; its character names are region-unique
@@ -67,12 +73,15 @@ function RS:SlashCommand(input)
         local reagents, srcs = 0, 0
         for _ in pairs(self.usedIn) do reagents = reagents + 1 end
         for _ in pairs(data.sources) do srcs = srcs + 1 end
-        self:Print(self:CountRecipes() .. " recipes, " .. reagents .. " reagents, sources for " .. srcs .. " items")
+        local peers = 0
+        for _ in pairs(data.shared) do peers = peers + 1 end
+        self:Print(self:CountRecipes() .. " recipes, " .. reagents .. " reagents, sources for " .. srcs .. " items, "
+            .. "loot counts from " .. peers .. " other Reagent Scout user" .. (peers == 1 and "" or "s"))
         for p, n in pairs(profs) do
             print("  " .. p .. ": " .. n .. (data.verified[p] and "" or " (not checked against a window yet)"))
         end
     elseif cmd == "reset" then
-        wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified)
+        wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared)
         self:RebuildIndex()
         self:Print("learned data wiped; built-in recipes remain. Open your profession windows to relearn.")
     else

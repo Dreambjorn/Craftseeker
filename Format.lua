@@ -9,9 +9,8 @@ function RS:RecipeLine(recipeID, reagentID)
     local rec = self.recipes[recipeID]
     local who, alt = self:WhoKnows(recipeID)
     local color = who == "me" and GREEN or who == "alt" and YELLOW or GREY
-    local qty, optional = self.ReagentQty(rec, reagentID)
+    local _, optional = self.ReagentQty(rec, reagentID)
     local text = color .. (rec.n or "?") .. "|r"
-    if qty and qty > 1 then text = text .. " x" .. qty end
     if optional then text = text .. GREY .. " (optional)|r" end
     if who == "alt" then text = text .. YELLOW .. " - " .. alt .. "|r" end
     return (rec.p or "?"), text
@@ -32,13 +31,6 @@ end
 -- { label, text } pairs for where an item has come from
 function RS:SourceLines(itemID, limit)
     local lines = {}
-    local made = self.madeBy[itemID]
-    if made then
-        for i = 1, math.min(limit, #made) do
-            local rec = self.recipes[made[i]]
-            lines[#lines + 1] = { "Crafted", (rec.p or "?") .. ": " .. (rec.n or "?") }
-        end
-    end
     local s = self.data.sources[itemID]
     if s then
         if s.vendor then

@@ -53,6 +53,10 @@ function RS:RebuildIndex()
     for recipeID, rec in pairs(self.recipes) do
         self:IndexRecipe(recipeID, rec)
     end
+    self.recipeItems = {}
+    for _, s in pairs(self.BUILTIN_SOURCES or {}) do
+        if s[4] > 0 then self.recipeItems[s[4]] = true end
+    end
 end
 
 function RS:SetRecipe(recipeID, rec)
@@ -78,13 +82,40 @@ function RS:GetLearnInfo(recipeID)
 end
 
 -- Players' measured WoW Forever drop rates for a recipe item: { { npc, name, chance %, kills }, ... }, best first
+-- Drop rates for an item: the built-in WoW Forever counts plus this account's own loot counts.
+-- { { npc, name, chance %, kills }, ... }, best first; nil when nobody has seen it drop
 function RS:GetDropRates(itemID)
+    local byNpc, out = {}, {}
     local r = self.BUILTIN_RATES and self.BUILTIN_RATES[itemID]
-    if not r then return nil end
-    local out = {}
-    for i = 1, #r, 4 do
-        out[#out + 1] = { npc = r[i], name = r[i + 1], chance = r[i + 2] / 100, kills = r[i + 3] }
+    for i = 1, r and #r or 0, 4 do
+        local entry = { npc = r[i], name = r[i + 1], drops = r[i + 2] / 10000 * r[i + 3], kills = r[i + 3] }
+        byNpc[r[i]] = entry
+        out[#out + 1] = entry
     end
+    -- own and shared counts: every opened corpse of a creature counts, also those without the item
+    local function Add(counts, own)
+        for npc, c in pairs(counts) do
+            local drops = c.items and c.items[itemID] or 0
+            local entry = byNpc[npc]
+            if drops > 0 and not entry then
+                entry = { npc = npc, name = c.name or "", drops = 0, kills = 0 }
+                byNpc[npc] = entry
+                out[#out + 1] = entry
+            end
+            if entry then
+                entry.drops, entry.kills = entry.drops + drops, entry.kills + (c.opened or 0)
+                if own then entry.own = (entry.own or 0) + (c.opened or 0) end
+            end
+        end
+    end
+    Add(self.data.counts, true)
+    for _, peer in pairs(self.data.shared) do Add(peer.counts or {}, false) end
+    if #out == 0 then return nil end
+    for _, e in ipairs(out) do
+        e.chance = e.kills > 0 and e.drops / e.kills * 100 or 0
+        if e.name == "" then e.name = self:NpcName(e.npc) or ("NPC " .. e.npc) end
+    end
+    table.sort(out, function(a, b) return a.chance > b.chance end)
     return out
 end
 
@@ -92,12 +123,62 @@ function RS.PlayerFaction()
     return FACTION_CODE[UnitFactionGroup("player")] or 0
 end
 
--- True when the entry (faction code 0 = both) is open to this character
+-- True when the entry (faction code 0 = both or unknown) is open to this character
 local function ForMe(faction, mine)
     return faction == 0 or faction == mine
 end
+RS.ForMe = ForMe
 
--- False for recipes only the other faction can learn
+local function MapName(uiMap)
+    local info = uiMap and uiMap > 0 and C_Map.GetMapInfo(uiMap)
+    return info and info.name or nil
+end
+
+-- Trainers or vendors players saw, this character's faction only: { npc, name, zone, copper[, stack] }
+local function SeenNpcs(list, width)
+    if not list then return nil end
+    local mine, out = RS.PlayerFaction(), {}
+    for i = 1, #list, width do
+        if ForMe(list[i + 2], mine) then
+            out[#out + 1] = { npc = list[i], name = list[i + 1], zone = MapName(list[i + 3]),
+                copper = list[i + 4], stack = width == 6 and list[i + 5] or nil }
+        end
+    end
+    return #out > 0 and out or nil
+end
+
+-- Where a creature is, from the built-in data: zone names, or an instance name
+function RS:GetPlaces(npcID)
+    local p = self.BUILTIN_PLACES and self.BUILTIN_PLACES[npcID]
+    if type(p) == "string" then return { p } end
+    local out = {}
+    for _, uiMap in ipairs(p or {}) do out[#out + 1] = MapName(uiMap) end
+    return out
+end
+
+-- Quests that teach a recipe, this character's faction only: { quest, name, giver, zone, level }
+function RS:GetRecipeQuests(recipeID)
+    local q = self.BUILTIN_QUESTS and self.BUILTIN_QUESTS[recipeID]
+    if not q then return nil end
+    local mine, out = self.PlayerFaction(), {}
+    for i = 1, #q, 6 do
+        if ForMe(q[i + 4], mine) then
+            out[#out + 1] = { quest = q[i], name = q[i + 1] ~= "" and q[i + 1] or ("Quest " .. q[i]),
+                giver = q[i + 2] ~= "" and q[i + 2] or nil, zone = MapName(q[i + 3]), level = q[i + 5] > 0 and q[i + 5] or nil }
+        end
+    end
+    return #out > 0 and out or nil
+end
+
+function RS:GetTrainers(recipeID)
+    return SeenNpcs(self.BUILTIN_TRAINERS and self.BUILTIN_TRAINERS[recipeID], 5)
+end
+
+function RS:GetVendors(itemID)
+    return SeenNpcs(self.BUILTIN_VENDORS and self.BUILTIN_VENDORS[itemID], 6)
+end
+
+-- False for recipes only the opposite faction can learn; the factions can't trade with each other.
 function RS:IsObtainable(recipeID)
     local info = self:GetLearnInfo(recipeID)
     if not info then return true end
@@ -105,6 +186,10 @@ function RS:IsObtainable(recipeID)
     if not ForMe(info.side, mine) then return false end
     -- vendors and quests are the only faction-bound ways to learn a recipe
     if info.how:find("[tdwca]") or info.how == "" then return true end
+    local seen = info.teach > 0 and self.BUILTIN_VENDORS and self.BUILTIN_VENDORS[info.teach]
+    for i = 3, seen and #seen or 0, 6 do
+        if ForMe(seen[i], mine) then return true end
+    end
     for i = 2, #info.vendors, 2 do
         if ForMe(info.vendors[i], mine) then return true end
     end
@@ -113,7 +198,6 @@ function RS:IsObtainable(recipeID)
     end
     return false
 end
-RS.ForMe = ForMe
 
 function RS:ItemName(itemID)
     local baked = self.BUILTIN_ITEMS and self.BUILTIN_ITEMS[itemID]
