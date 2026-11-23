@@ -223,9 +223,8 @@ function RS:WhoKnows(recipeID)
     return nil
 end
 
--- Recipe IDs that use an item and this character can get: known first, then alts, then by profession and name
-function RS:GetUses(itemID)
-    local list = self.usedIn[itemID]
+-- The recipes of a list this character can get: known first, then alts, then by profession and name
+local function Obtainable(self, list)
     if not list then return nil end
     local out, rankOf = {}, {}
     local rank = { me = 0, alt = 1 }
@@ -247,6 +246,14 @@ function RS:GetUses(itemID)
         return (A.n or "") < (B.n or "")
     end)
     return out
+end
+
+function RS:GetUses(itemID)
+    return Obtainable(self, self.usedIn[itemID])
+end
+
+function RS:GetMakers(itemID)
+    return Obtainable(self, self.madeBy[itemID])
 end
 
 function RS.ReagentQty(rec, itemID)

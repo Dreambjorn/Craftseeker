@@ -20,7 +20,8 @@ Alt+Click any crafting reagent to see every recipe it goes into, how to learn ea
 - **Sources:** once an item is a known reagent, the addon records the vendors that sell it (with price), the mobs that drop it, the nodes you gather it from, and the zones you fish it in.
 
 ## Using it
-- **Alt+Click** an item in your bags to open the browser. It looks like the profession window: recipes grouped by profession on the left, the selected recipe's reagents and how to learn it on the right. The right side scrolls: every creature, vendor and trainer is listed in a table, best drop rate first; hover a row for all its zones.
+- **Alt+Click** an item in your bags to open the browser. It looks like the profession window: recipes grouped by profession on the left, the selected recipe's reagents and how to learn it on the right. The right side scrolls: creatures, vendors and trainers are listed in tables, best drop rate first; hover a row for all its zones.
+- **Click** an item in the window for the recipes that use it; **right-click** it for the recipes that make it.
   - Green: this character knows it. Yellow: an alt knows it. Grey: none of your characters know it yet.
 - `/rs` or the minimap button opens the browser. Type a name, or Shift+Click an item into the search box.
 - **Settings** are under Options > AddOns > Reagent Scout (`/rs options`, or right-click the minimap button): the minimap button, source tracking and sharing. `/rs minimap` shows or hides the button.

@@ -14,6 +14,7 @@ local f, searchBox, title, summary, scrollBox, listEmpty
 local detail -- right-hand panel widgets
 local currentQuery, currentItem, selectedRecipe
 local collapsed = {} -- [section title] = true, kept for the session
+local madeView       -- the list shows the recipes that make currentItem, not those that use it
 local Render, ShowDetail
 
 local function ShowItemTooltip(self)
@@ -28,10 +29,14 @@ local function ShowItemTooltip(self)
     end
 end
 
-local function LinkOrLookup(self)
+-- Right-click: the recipes that make the item
+local function LinkOrLookup(self, button)
     if IsShiftKeyDown() and self.itemID then
         local _, link = C_Item.GetItemInfo(self.itemID)
         if link then ChatFrameUtil.InsertLink(link) end
+    elseif button == "RightButton" then
+        local id = self.lookup or self.itemID
+        if id then Browser:Show("made:" .. id) end
     elseif self.lookup then
         Browser:Show("item:" .. self.lookup)
     end
@@ -44,15 +49,15 @@ end
 
 -- List ---------------------------------------------------------------------
 
-local function OnRowClick(self)
-    if self.recipeID and not IsShiftKeyDown() then
+local function OnRowClick(self, button)
+    if self.recipeID and not IsShiftKeyDown() and button ~= "RightButton" then
         selectedRecipe = self.recipeID
         scrollBox:ForEachFrame(function(frame)
             if frame.Selected then frame.Selected:SetShown(frame.recipeID ~= nil and frame.recipeID == selectedRecipe) end
         end)
         ShowDetail()
     else
-        LinkOrLookup(self)
+        LinkOrLookup(self, button)
     end
 end
 
@@ -76,7 +81,7 @@ local function InitRow(row, data)
         row.Label:SetPoint("RIGHT", row.Right, "LEFT", -6, 0)
         row.Label:SetJustifyH("LEFT")
         row.Label:SetWordWrap(false)
-        row:RegisterForClicks("LeftButtonUp")
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         row:SetScript("OnEnter", ShowItemTooltip)
         row:SetScript("OnLeave", GameTooltip_Hide)
         row:SetScript("OnClick", OnRowClick)
@@ -127,6 +132,7 @@ local function ItemSlot(parent)
     b:SetSize(SLOT, SLOT)
     b:SetScript("OnEnter", ShowItemTooltip)
     b:SetScript("OnLeave", GameTooltip_Hide)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     b:SetScript("OnClick", LinkOrLookup)
     return b
 end
@@ -567,7 +573,8 @@ function ShowDetail()
     cursor = -8
     if not rec then
         AddText(
-            "Alt+Click any item, or search on the left.\n\n" ..
+            "Alt+Click any item, or search on the left.\n" ..
+            "Click an item in this window for the recipes that use it, right-click it for the recipes that make it.\n\n" ..
             "|cff40ff40Green|r  you know the recipe\n" ..
             "|cffffd100Yellow|r  one of your alts knows it\n" ..
             "|cff9d9d9dGrey|r  none of your characters know it yet\n\n" ..
@@ -600,20 +607,9 @@ function ShowDetail()
     AddLearn(selectedRecipe, rec)
 
     -- the looked-up reagent: its vendors, then what this account has seen
-    if currentItem then
+    if currentItem and not madeView then
         local name = RS:ItemName(currentItem) or "it"
         AddVendors(currentItem, RS:GetQuestieSources(currentItem), "Where to buy " .. name)
-        local made = {}
-        for _, id in ipairs(RS.madeBy[currentItem] or {}) do
-            local r = RS.recipes[id]
-            if r and RS:IsObtainable(id) then
-                made[#made + 1] = { cells = { r.n or "?", r.p or "?" }, tip = { r.n or "?", (r.p or "?") .. " recipe" } }
-            end
-        end
-        if #made > 0 then
-            AddHeading("Made with")
-            AddTable(nil, made, { nil, "RIGHT" })
-        end
         local seen = {}
         for _, l in ipairs(RS:SourceLines(currentItem, 50)) do
             seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
@@ -746,45 +742,46 @@ local function PickerView(hits, query)
     return list
 end
 
-local function ItemView(itemID)
-    if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
-    currentItem = itemID
+-- Recipes in one section per profession, in the order given; reagentID tags optional reagents
+local function ProfessionSections(ids, reagentID)
     local list, first = {}, nil
-    local uses = RS:GetUses(itemID)
-    local nProfs = 0
-    if uses then
-        -- one section per profession; GetUses already put known recipes first within each
-        local byProf, profs = {}, {}
-        for _, recipeID in ipairs(uses) do
-            local p = RS.recipes[recipeID].p or "?"
-            if not byProf[p] then
-                byProf[p] = {}
-                profs[#profs + 1] = p
-            end
-            table.insert(byProf[p], recipeID)
+    local byProf, profs = {}, {}
+    for _, recipeID in ipairs(ids or {}) do
+        local p = RS.recipes[recipeID].p or "?"
+        if not byProf[p] then
+            byProf[p] = {}
+            profs[#profs + 1] = p
         end
-        table.sort(profs)
-        nProfs = #profs
-        for _, p in ipairs(profs) do
-            local ids = byProf[p]
-            list[#list + 1] = { header = true, key = p, text = p .. "  " .. GREY .. #ids .. "|r" }
-            for _, recipeID in ipairs(ids) do
-                first = first or recipeID
-                if not collapsed[p] then
-                    local rec = RS.recipes[recipeID]
-                    local _, text = RS:RecipeLine(recipeID, itemID)
-                    list[#list + 1] = {
-                        recipeID = recipeID, itemID = rec.o, spellID = rec.o == nil and recipeID or nil,
-                        left = text,
-                    }
-                end
+        table.insert(byProf[p], recipeID)
+    end
+    table.sort(profs)
+    for _, p in ipairs(profs) do
+        local section = byProf[p]
+        list[#list + 1] = { header = true, key = p, text = p .. "  " .. GREY .. #section .. "|r" }
+        for _, recipeID in ipairs(section) do
+            first = first or recipeID
+            if not collapsed[p] then
+                local rec = RS.recipes[recipeID]
+                local _, text = RS:RecipeLine(recipeID, reagentID)
+                list[#list + 1] = {
+                    recipeID = recipeID, itemID = rec.o, spellID = rec.o == nil and recipeID or nil,
+                    left = text,
+                }
             end
         end
     end
+    -- keep the selected recipe when it is still listed
     local keep = false
-    for _, id in ipairs(uses or {}) do if id == selectedRecipe then keep = true end end
+    for _, id in ipairs(ids or {}) do if id == selectedRecipe then keep = true end end
     if not keep then selectedRecipe = first end
+    return list, #profs
+end
 
+local function ItemView(itemID)
+    if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
+    currentItem = itemID
+    local uses = RS:GetUses(itemID)
+    local list, nProfs = ProfessionSections(uses, itemID)
     local n = uses and #uses or 0
     SetHeading(C_Item.GetItemIconByID(itemID), RS:ItemName(itemID) or ("item " .. itemID),
         n > 0 and ("Used in %d recipe%s across %d profession%s"):format(n, n == 1 and "" or "s", nProfs, nProfs == 1 and "" or "s")
@@ -795,9 +792,27 @@ local function ItemView(itemID)
     return list
 end
 
+-- Right-click on an item: the recipes that make it
+local function MadeView(itemID)
+    if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
+    currentItem, madeView = itemID, true
+    local makers = RS:GetMakers(itemID)
+    local list = ProfessionSections(makers)
+    local n = makers and #makers or 0
+    SetHeading(C_Item.GetItemIconByID(itemID), RS:ItemName(itemID) or ("item " .. itemID),
+        n > 0 and ("Made by %d recipe%s"):format(n, n == 1 and "" or "s")
+            or (RS.madeBy[itemID] and "Only made by the opposite faction" or "No recipe makes this"), itemID)
+    if #list == 0 then
+        return nil, RS.madeBy[itemID] and "Only the opposite faction can make this." or "No recipe makes this item."
+    end
+    return list
+end
+
 local function BuildView(query)
-    currentItem = nil
+    currentItem, madeView = nil, false
     if query == "" then return WelcomeView() end
+    local made = tonumber(query:match("^made:(%d+)$"))
+    if made then return MadeView(made) end
     local itemID = RS.ItemIDFromText(query)
     if itemID then return ItemView(itemID) end
     local hits = RS:SearchReagentsByName(query)
@@ -821,7 +836,7 @@ function Browser:Show(query, fromTyping)
     currentQuery = strtrim(query or "")
     if not fromTyping then
         -- show the item's name rather than item:123 or a raw link
-        local itemID = RS.ItemIDFromText(currentQuery)
+        local itemID = RS.ItemIDFromText(currentQuery) or tonumber(currentQuery:match("^made:(%d+)$"))
         searchBox:SetText(itemID and RS:ItemName(itemID) or currentQuery)
     end
     Render(false)
