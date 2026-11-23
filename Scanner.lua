@@ -1,6 +1,6 @@
--- Reagent Scout: learns recipes and what each character knows from profession windows
-local _, RS = ...
-local Scanner = RS:NewModule("Scanner", "AceEvent-3.0", "AceBucket-3.0")
+-- Craftseeker: learns recipes and what each character knows from profession windows
+local _, CS = ...
+local Scanner = CS:NewModule("Scanner", "AceEvent-3.0", "AceBucket-3.0")
 
 local BASIC = Enum and Enum.CraftingReagentType and Enum.CraftingReagentType.Basic or 1
 -- LIST_UPDATE fires after every craft; only the first one per window opening needs a scan
@@ -60,21 +60,21 @@ function Scanner:Scan()
     if not ids or #ids == 0 then return end
     scanned = true
 
-    local data = RS.data
-    local known = data.known[RS.CharKey()]
+    local data = CS.data
+    local known = data.known[CS.CharKey()]
     local added, rebuild, unlearned = 0, false, false
     local listed = {}
     for _, recipeID in ipairs(ids) do
         listed[recipeID] = true
         local rec, info = ScanRecipe(recipeID)
         if rec then
-            local old = RS.recipes[recipeID]
+            local old = CS.recipes[recipeID]
             if not old then
                 added = added + 1
             elseif IndexChanged(old, rec) then
                 rebuild = true
             end
-            RS:SetRecipe(recipeID, rec)
+            CS:SetRecipe(recipeID, rec)
         end
         if ownWindow and info then
             known[recipeID] = info.learned and true or nil
@@ -89,9 +89,9 @@ function Scanner:Scan()
         rebuild = true
     end
     -- IndexRecipe only adds, so drop entries for reagents a recipe no longer uses
-    if rebuild then RS:RebuildIndex() end
+    if rebuild then CS:RebuildIndex() end
     if added > 0 then
-        RS:Print(("learned %d new recipes from %s (%d total)."):format(added, prof or "this profession", RS:CountRecipes()))
+        CS:Print(("learned %d new recipes from %s (%d total)."):format(added, prof or "this profession", CS:CountRecipes()))
     end
 end
 

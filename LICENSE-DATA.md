@@ -6,7 +6,7 @@ The table `R` in `Data.lua` (drop rates of recipe items) is adapted from two pla
 datasets and is shared under the Creative Commons Attribution-ShareAlike 4.0 International licence
 (CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/).
 
-Changes made by Reagent Scout: counts reduced to recipe items only, the top five creatures per item kept,
+Changes made by Craftseeker: counts reduced to recipe items only, the top five creatures per item kept,
 chances worked out with Drop Tables' formula and rounded to hundredths of a percent.
 
 ### Drop Tables
@@ -54,16 +54,16 @@ counts, with names, levels and places from the NPC sightings.
 
 Contains data from "Polestar Recorder sessions" by the Polestar authors,
 https://github.com/fitzforge/polestar (data/codex/recorded.json), licensed under Creative Commons
-Attribution 4.0 (CC BY 4.0, https://creativecommons.org/licenses/by/4.0/). Changed by Reagent Scout: only
+Attribution 4.0 (CC BY 4.0, https://creativecommons.org/licenses/by/4.0/). Changed by Craftseeker: only
 rows marked trusted, only recipe items, used where Drop Tables has no rate. The Polestar authors do not
-endorse Reagent Scout.
+endorse Craftseeker.
 
 ## Trainers, vendors and creature names
 
 The tables `T` and `V` in `Data.lua`, and creature names in `R`, use data from Efficient Games
 (https://efficient.games), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
 EG Link's WoW Forever trainers, vendors, NPCs and creature details,
-https://github.com/JIVESCORP/eg-link-output-wowf. Changed by Reagent Scout: merged over every client
+https://github.com/JIVESCORP/eg-link-output-wowf. Changed by Craftseeker: merged over every client
 build, reduced to recipes, recipe items and reagents, with the cheapest price and first recorded place.
 
 ## Creature places and quests

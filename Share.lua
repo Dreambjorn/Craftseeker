@@ -1,8 +1,8 @@
--- Reagent Scout: trades loot counts with other Reagent Scout users in the guild, the group and the friends lists
-local _, RS = ...
-local Share = RS:NewModule("Share", "AceEvent-3.0", "AceTimer-3.0", "AceBucket-3.0")
+-- Craftseeker: trades loot counts with other Craftseeker users in the guild, the group and the friends lists
+local _, CS = ...
+local Share = CS:NewModule("Share", "AceEvent-3.0", "AceTimer-3.0", "AceBucket-3.0")
 
-local PREFIX = "ReagentScout"
+local PREFIX = "Craftseeker"
 local VERSION = "1"
 local CHUNK = 200          -- addon messages carry 255 bytes; the rest is the header
 local GAP = 0.7            -- seconds between our messages
@@ -16,7 +16,7 @@ local answered = {}        -- [sender] = GetTime() of our last data reply
 local roster, online      -- group members and online friends at the last look; nil until the first
 
 local function Enabled()
-    return RS.data.settings.share
+    return CS.data.settings.share
 end
 
 -- Forever refuses addon messages to custom channels, so peers are reached through these
@@ -28,18 +28,18 @@ end
 local function Friends()
     local list, seen = {}, {}
     local count = C_FriendList.GetNumFriends() or 0
-    for i = 1, RS.IsSecret(count) and 0 or count do
+    for i = 1, CS.IsSecret(count) and 0 or count do
         local info = C_FriendList.GetFriendInfoByIndex(i)
-        if info and not RS.IsSecret(info.name) and info.connected and info.name and info.name ~= "" then
+        if info and not CS.IsSecret(info.name) and info.connected and info.name and info.name ~= "" then
             seen[info.name] = true
             list[#list + 1] = { "WHISPER", info.name }
         end
     end
     local bn = BNGetNumFriends() or 0
-    for i = 1, RS.IsSecret(bn) and 0 or bn do
+    for i = 1, CS.IsSecret(bn) and 0 or bn do
         for a = 1, C_BattleNet.GetFriendNumGameAccounts(i) or 0 do
             local g = C_BattleNet.GetFriendGameAccountInfo(i, a)
-            if g and not RS.IsSecret(g.clientProgram, g.wowProjectID, g.isOnline, g.gameAccountID, g.characterName)
+            if g and not CS.IsSecret(g.clientProgram, g.wowProjectID, g.isOnline, g.gameAccountID, g.characterName)
                 and g.clientProgram == "WoW" and g.wowProjectID == WOW_PROJECT_ID and g.isOnline
                 and type(g.gameAccountID) == "number" and not seen[g.characterName or ""] then
                 list[#list + 1] = { "BN", g.gameAccountID }
@@ -90,11 +90,11 @@ end
 -- Our counts as text: "npc,opened,item:drops,...;" for creatures that matter to drop rates
 function Share:Serialize()
     local relevant = {}
-    for _, r in pairs(RS.BUILTIN_RATES or {}) do
+    for _, r in pairs(CS.BUILTIN_RATES or {}) do
         for i = 1, #r, 4 do relevant[r[i]] = true end
     end
     local parts = {}
-    for npc, c in pairs(RS.data.counts) do
+    for npc, c in pairs(CS.data.counts) do
         if (c.opened or 0) > 0 and (c.items or relevant[npc]) then
             local fields = { npc, c.opened }
             for item, n in pairs(c.items or {}) do fields[#fields + 1] = item .. ":" .. n end
@@ -126,16 +126,16 @@ end
 
 -- Peers who log in later announce themselves and get ours back, so a repeat is only needed after new loot
 function Share:HelloIfChanged()
-    if RS.data.countsStamp ~= self.helloStamp then self:Hello() end
+    if CS.data.countsStamp ~= self.helloStamp then self:Hello() end
 end
 
 local function HelloText()
-    return "H" .. VERSION .. "," .. RS.data.install .. "," .. (RS.data.countsStamp or 0)
+    return "H" .. VERSION .. "," .. CS.data.install .. "," .. (CS.data.countsStamp or 0)
 end
 
 function Share:Hello()
     if not Enabled() then return end
-    self.helloStamp = RS.data.countsStamp
+    self.helloStamp = CS.data.countsStamp
     local msg = HelloText()
     if IsInGuild() then Send("GUILD", nil, msg) end
     local group = GroupType()
@@ -153,7 +153,7 @@ function Share:RosterChanged()
     local now, joined = {}, false
     for i = 1, group and GetNumGroupMembers() or 0 do
         local name = GetRaidRosterInfo(i)
-        if name and not RS.IsSecret(name) then
+        if name and not CS.IsSecret(name) then
             now[name] = true
             if roster and not roster[name] then joined = true end
         end
@@ -177,7 +177,7 @@ end
 function Share:SendData(chatType, target)
     local data = self:Serialize()
     local n = math.max(1, math.ceil(#data / CHUNK))
-    local head = "D" .. VERSION .. "," .. RS.data.install .. "," .. (RS.data.countsStamp or 0) .. ","
+    local head = "D" .. VERSION .. "," .. CS.data.install .. "," .. (CS.data.countsStamp or 0) .. ","
     for i = 1, n do
         Send(chatType, target, head .. i .. "," .. n .. "," .. data:sub((i - 1) * CHUNK + 1, i * CHUNK))
     end
@@ -195,19 +195,19 @@ function Share:OnMessage(msg, chatType, sender, bnAccount)
     if not Enabled() then return end
     local kind, version, install, stamp, rest = msg:match("^(%a)(%d+),(%x+),(%d+),?(.*)$")
     stamp = tonumber(stamp)
-    if not kind or version ~= VERSION or install == RS.data.install or not stamp then return end
-    local shared = RS.data.shared
+    if not kind or version ~= VERSION or install == CS.data.install or not stamp then return end
+    local shared = CS.data.shared
     if kind == "H" then
         -- they have newer counts than we stored: ask once per stamp
         if stamp > ((shared[install] and shared[install].stamp) or 0) and asked[install] ~= stamp then
             asked[install] = stamp
             local t, target = ReplyTarget(chatType, sender, bnAccount)
-            Send(t, target, "R" .. VERSION .. "," .. RS.data.install .. "," .. ((shared[install] and shared[install].stamp) or 0))
+            Send(t, target, "R" .. VERSION .. "," .. CS.data.install .. "," .. ((shared[install] and shared[install].stamp) or 0))
             -- and tell them about ours, so both sides catch up
             Send(t, target, HelloText())
         end
     elseif kind == "R" then
-        if (RS.data.countsStamp or 0) > stamp and GetTime() - (answered[sender] or -999) > 300 then
+        if (CS.data.countsStamp or 0) > stamp and GetTime() - (answered[sender] or -999) > 300 then
             answered[sender] = GetTime()
             self:SendData(ReplyTarget(chatType, sender, bnAccount))
         end
@@ -227,18 +227,18 @@ function Share:OnMessage(msg, chatType, sender, bnAccount)
         if inc.got == inc.n then
             incoming[install] = nil
             shared[install] = { stamp = stamp, from = sender, counts = Share.Parse(table.concat(inc.parts)) }
-            RS.sharedChanged = true
+            CS.sharedChanged = true
         end
     end
 end
 
 function Share:CHAT_MSG_ADDON(_, prefix, msg, chatType, sender)
-    if RS.IsSecret(prefix, msg, chatType, sender) or prefix ~= PREFIX or type(msg) ~= "string" then return end
+    if CS.IsSecret(prefix, msg, chatType, sender) or prefix ~= PREFIX or type(msg) ~= "string" then return end
     self:OnMessage(msg, chatType, sender)
 end
 
 function Share:BN_CHAT_MSG_ADDON(_, prefix, msg, _, bnAccount)
-    if RS.IsSecret(prefix, msg, bnAccount) or prefix ~= PREFIX or type(msg) ~= "string" then return end
+    if CS.IsSecret(prefix, msg, bnAccount) or prefix ~= PREFIX or type(msg) ~= "string" then return end
     self:OnMessage(msg, "BN", nil, bnAccount)
 end
 
@@ -248,8 +248,8 @@ function Share:GROUP_JOINED()
 end
 
 function Share:OnEnable()
-    if not RS.data.install then
-        RS.data.install = ("%08x"):format(math.random(0, 0x7fffffff))
+    if not CS.data.install then
+        CS.data.install = ("%08x"):format(math.random(0, 0x7fffffff))
     end
     C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
     self:RegisterEvent("CHAT_MSG_ADDON")

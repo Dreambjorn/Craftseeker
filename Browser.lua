@@ -1,6 +1,6 @@
--- Reagent Scout: browser window (/rs, or Alt+Click an item), laid out like the profession window
-local _, RS = ...
-local Browser = RS:NewModule("Browser", "AceEvent-3.0", "AceBucket-3.0")
+-- Craftseeker: browser window (/cs, or Alt+Click an item), laid out like the profession window
+local _, CS = ...
+local Browser = CS:NewModule("Browser", "AceEvent-3.0", "AceBucket-3.0")
 
 local HEADER_H, ROW_H, SPACER_H = 26, 24, 8
 local LIST_W = 274
@@ -45,7 +45,7 @@ local function LinkOrLookup(self, button)
 end
 
 local function QualityColor(itemID)
-    local quality = itemID and RS:ItemQuality(itemID)
+    local quality = itemID and CS:ItemQuality(itemID)
     return quality and ITEM_QUALITY_COLORS[quality]
 end
 
@@ -143,7 +143,7 @@ local function FillSlot(slot, itemID, spellID)
     slot.itemID, slot.spellID, slot.lookup = itemID, spellID, itemID
     if itemID then
         slot:SetItemButtonTexture(C_Item.GetItemIconByID(itemID))
-        slot:SetItemButtonQuality(RS:ItemQuality(itemID), itemID)
+        slot:SetItemButtonQuality(CS:ItemQuality(itemID), itemID)
     else
         slot:SetItemButtonTexture(spellID and C_Spell.GetSpellTexture(spellID) or 134400)
         slot:SetItemButtonQuality(nil)
@@ -308,7 +308,7 @@ local function AddSlot(itemID, spellID, label)
 end
 
 local function Money(copper)
-    return copper and copper > 0 and RS.Money(copper) or ""
+    return copper and copper > 0 and CS.Money(copper) or ""
 end
 
 local function ZoneCell(zones)
@@ -325,7 +325,7 @@ local function AddDrops(itemID, qs)
         byNpc[e.npc] = entry
         list[#list + 1] = entry
     end
-    for _, r in ipairs(RS:GetDropRates(itemID) or {}) do
+    for _, r in ipairs(CS:GetDropRates(itemID) or {}) do
         local entry = byNpc[r.npc]
         if not entry then
             entry = { npc = r.npc, name = r.name, zones = {} }
@@ -337,7 +337,7 @@ local function AddDrops(itemID, qs)
     if #list == 0 then return false end
     -- QuestieDB has no spawns for many Forever creatures; the built-in places fill in
     for _, e in ipairs(list) do
-        if #e.zones == 0 then e.zones = RS:GetPlaces(e.npc) end
+        if #e.zones == 0 then e.zones = CS:GetPlaces(e.npc) end
     end
     local here = GetRealZoneText()
     table.sort(list, function(a, b)
@@ -367,7 +367,7 @@ end
 -- Vendors of an item, this faction only: what players saw (with price) joined with QuestieDB's list
 local function AddVendors(itemID, qs, heading)
     local byNpc, list = {}, {}
-    for _, v in ipairs(RS:GetVendors(itemID) or {}) do
+    for _, v in ipairs(CS:GetVendors(itemID) or {}) do
         local price = v.copper and v.copper > 0 and (Money(v.copper) .. (v.stack and v.stack > 1 and (GREY .. " /" .. v.stack .. "|r") or "")) or ""
         local entry = { name = v.name, zones = v.zone and { v.zone } or {}, price = price }
         byNpc[v.npc] = entry
@@ -396,7 +396,7 @@ end
 -- Quests that teach a recipe or reward its recipe item: name, who gives it and where
 local function AddQuests(recipeID, qs)
     local list, seen = {}, {}
-    for _, q in ipairs(RS:GetRecipeQuests(recipeID) or {}) do
+    for _, q in ipairs(CS:GetRecipeQuests(recipeID) or {}) do
         list[#list + 1] = q
         seen[q.name] = true
     end
@@ -417,7 +417,7 @@ local function AddQuests(recipeID, qs)
 end
 
 local function AddTrainers(recipeID)
-    local list = RS:GetTrainers(recipeID)
+    local list = CS:GetTrainers(recipeID)
     if not list then return false end
     table.sort(list, function(a, b) return (a.zone or "~") < (b.zone or "~") end)
     AddHeading(("Taught by %d trainer%s"):format(#list, #list == 1 and "" or "s"))
@@ -431,10 +431,10 @@ end
 
 -- Zone names from a flat area, faction[, level] list, keeping this character's faction only
 local function AreaList(list, perEntry, withLevel)
-    local mine = RS.PlayerFaction()
+    local mine = CS.PlayerFaction()
     local out, seen = {}, {}
     for i = 1, #list, perEntry do
-        if RS.ForMe(list[i + 1], mine) then
+        if CS.ForMe(list[i + 1], mine) then
             local area = list[i]
             local name = (area > 0 and C_Map.GetAreaInfo(area)) or "an unknown zone"
             if withLevel and list[i + 2] > 0 then name = name .. " (level " .. list[i + 2] .. ")" end
@@ -449,14 +449,14 @@ end
 
 local function AddLearn(recipeID, rec)
     AddHeading("How to learn it:")
-    local info = RS:GetLearnInfo(recipeID)
+    local info = CS:GetLearnInfo(recipeID)
     if not info then
         AddText(GREY .. "Not recorded in the built-in data.|r")
         return
     end
     local how = info.how
     if info.teach > 0 then
-        local name = RS:ItemName(info.teach) or "Recipe item"
+        local name = CS:ItemName(info.teach) or "Recipe item"
         local tq = QualityColor(info.teach)
         if tq then name = tq.hex .. name .. "|r" end
         local slot = AddSlot(info.teach, nil, name .. (info.bound and (GREY .. "  (binds when picked up)|r") or ""))
@@ -474,7 +474,7 @@ local function AddLearn(recipeID, rec)
     if info.side > 0 then AddText(FACTION_NAME[info.side] .. " only") end
     if how:find("a") then AddText("Learned automatically with the profession") end
 
-    local qs = info.teach > 0 and RS:GetQuestieSources(info.teach) or nil
+    local qs = info.teach > 0 and CS:GetQuestieSources(info.teach) or nil
     local shown = false
     if AddTrainers(recipeID) then
         shown = true
@@ -579,7 +579,7 @@ end
 function ShowDetail(keep)
     if not keep then wipe(expanded) end
     ResetDetail()
-    local rec = selectedRecipe and RS.recipes[selectedRecipe]
+    local rec = selectedRecipe and CS.recipes[selectedRecipe]
     local atlas = rec and rec.p and ("Professions-Recipe-Background-" .. rec.p:gsub("%s", ""))
     if not (atlas and C_Texture.GetAtlasInfo(atlas)) then atlas = "Professions-Recipe-Background" end
     detail.Background:SetAtlas(atlas)
@@ -602,7 +602,7 @@ function ShowDetail(keep)
     local color = QualityColor(rec.o)
     detail.Name:SetText((rec.n or "?") .. (rec.q and rec.q > 1 and (" x" .. rec.q) or ""))
     if color then detail.Name:SetTextColor(color.r, color.g, color.b) else detail.Name:SetTextColor(1, 1, 1) end
-    local who, alt = RS:WhoKnows(selectedRecipe)
+    local who, alt = CS:WhoKnows(selectedRecipe)
     detail.Sub:SetText((rec.p or "?") .. "   " .. (who == "me" and "|cff40ff40You know this|r"
         or who == "alt" and (GOLD .. "Known by " .. alt .. "|r") or (GREY .. "None of your characters know this|r")))
     cursor = -6 - SLOT - 14
@@ -610,7 +610,7 @@ function ShowDetail(keep)
     AddHeading("Reagents:")
     for i, r in ipairs(rec.r) do
         local id, qty = r[1], r[2]
-        local name = RS:ItemName(id) or ("item " .. id)
+        local name = CS:ItemName(id) or ("item " .. id)
         local slot = AddSlot(id, nil, qty .. " " .. (id == currentItem and (GOLD .. name .. "|r") or name))
         local col = (i - 1) % 2
         slot:SetPoint("TOPLEFT", col * REAGENT_COL, cursor)
@@ -622,10 +622,10 @@ function ShowDetail(keep)
 
     -- the looked-up reagent: its vendors, then what this account has seen
     if currentItem and not madeView then
-        local name = RS:ItemName(currentItem) or "it"
-        AddVendors(currentItem, RS:GetQuestieSources(currentItem), "Where to buy " .. name)
+        local name = CS:ItemName(currentItem) or "it"
+        AddVendors(currentItem, CS:GetQuestieSources(currentItem), "Where to buy " .. name)
         local seen = {}
-        for _, l in ipairs(RS:SourceLines(currentItem, 50)) do
+        for _, l in ipairs(CS:SourceLines(currentItem, 50)) do
             seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
         end
         if #seen > 0 then
@@ -639,7 +639,7 @@ end
 -- Frame --------------------------------------------------------------------
 
 local function Build()
-    f = CreateFrame("Frame", "ReagentScoutBrowser", UIParent, "PortraitFrameTemplate")
+    f = CreateFrame("Frame", "CraftseekerBrowser", UIParent, "PortraitFrameTemplate")
     f:SetSize(830, 620)
     f:SetPoint("CENTER")
     f:SetMovable(true)
@@ -649,10 +649,10 @@ local function Build()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:SetFrameStrata("HIGH")
     f:SetClampedToScreen(true)
-    f:SetTitle("Reagent Scout")
+    f:SetTitle("Craftseeker")
     f:SetPortraitToAsset(DEFAULT_ICON)
     f:Hide()
-    tinsert(UISpecialFrames, "ReagentScoutBrowser")
+    tinsert(UISpecialFrames, "CraftseekerBrowser")
 
     title = Text(f, "GameFontHighlightLarge2")
     title:SetPoint("TOPLEFT", 66, -30)
@@ -736,7 +736,7 @@ end
 
 -- Views return the list elements, or nil plus a message for the empty list
 local function WelcomeView()
-    SetHeading(nil, "Look up a reagent", ("%d recipes across every profession"):format(RS:CountRecipes()))
+    SetHeading(nil, "Look up a reagent", ("%d recipes across every profession"):format(CS:CountRecipes()))
     return nil, ""
 end
 
@@ -745,11 +745,11 @@ local function PickerView(hits, query)
     if #hits == 0 then return nil, "No reagent matches that." end
     local list = {}
     for _, itemID in ipairs(hits) do
-        local n = #RS:GetUses(itemID)
+        local n = #CS:GetUses(itemID)
         list[#list + 1] = {
             itemID = itemID, lookup = itemID,
             icon = C_Item.GetItemIconByID(itemID),
-            left = RS:ItemName(itemID) or ("item " .. itemID),
+            left = CS:ItemName(itemID) or ("item " .. itemID),
             right = n .. " recipe" .. (n == 1 and "" or "s"),
         }
     end
@@ -761,7 +761,7 @@ local function ProfessionSections(ids, reagentID)
     local list, first = {}, nil
     local byProf, profs = {}, {}
     for _, recipeID in ipairs(ids or {}) do
-        local p = RS.recipes[recipeID].p or "?"
+        local p = CS.recipes[recipeID].p or "?"
         if not byProf[p] then
             byProf[p] = {}
             profs[#profs + 1] = p
@@ -775,8 +775,8 @@ local function ProfessionSections(ids, reagentID)
         for _, recipeID in ipairs(section) do
             first = first or recipeID
             if not collapsed[p] then
-                local rec = RS.recipes[recipeID]
-                local _, text = RS:RecipeLine(recipeID, reagentID)
+                local rec = CS.recipes[recipeID]
+                local _, text = CS:RecipeLine(recipeID, reagentID)
                 list[#list + 1] = {
                     recipeID = recipeID, itemID = rec.o, spellID = rec.o == nil and recipeID or nil,
                     left = text,
@@ -794,14 +794,14 @@ end
 local function ItemView(itemID)
     if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
     currentItem = itemID
-    local uses = RS:GetUses(itemID)
+    local uses = CS:GetUses(itemID)
     local list, nProfs = ProfessionSections(uses, itemID)
     local n = uses and #uses or 0
-    SetHeading(C_Item.GetItemIconByID(itemID), RS:ItemName(itemID) or ("item " .. itemID),
+    SetHeading(C_Item.GetItemIconByID(itemID), CS:ItemName(itemID) or ("item " .. itemID),
         n > 0 and ("Used in %d recipe%s across %d profession%s"):format(n, n == 1 and "" or "s", nProfs, nProfs == 1 and "" or "s")
-            or (RS.usedIn[itemID] and "Only used in recipes the opposite faction learns" or "Not used in any recipe"), itemID)
+            or (CS.usedIn[itemID] and "Only used in recipes the opposite faction learns" or "Not used in any recipe"), itemID)
     if #list == 0 then
-        return nil, RS.usedIn[itemID] and "Only used in recipes the opposite faction learns." or "No recipe uses this item."
+        return nil, CS.usedIn[itemID] and "Only used in recipes the opposite faction learns." or "No recipe uses this item."
     end
     return list
 end
@@ -810,14 +810,14 @@ end
 local function MadeView(itemID)
     if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
     currentItem, madeView = itemID, true
-    local makers = RS:GetMakers(itemID)
+    local makers = CS:GetMakers(itemID)
     local list = ProfessionSections(makers)
     local n = makers and #makers or 0
-    SetHeading(C_Item.GetItemIconByID(itemID), RS:ItemName(itemID) or ("item " .. itemID),
+    SetHeading(C_Item.GetItemIconByID(itemID), CS:ItemName(itemID) or ("item " .. itemID),
         n > 0 and ("Made by %d recipe%s"):format(n, n == 1 and "" or "s")
-            or (RS.madeBy[itemID] and "Only made by the opposite faction" or "No recipe makes this"), itemID)
+            or (CS.madeBy[itemID] and "Only made by the opposite faction" or "No recipe makes this"), itemID)
     if #list == 0 then
-        return nil, RS.madeBy[itemID] and "Only the opposite faction can make this." or "No recipe makes this item."
+        return nil, CS.madeBy[itemID] and "Only the opposite faction can make this." or "No recipe makes this item."
     end
     return list
 end
@@ -827,9 +827,9 @@ local function BuildView(query)
     if query == "" then return WelcomeView() end
     local made = tonumber(query:match("^made:(%d+)$"))
     if made then return MadeView(made) end
-    local itemID = RS.ItemIDFromText(query)
+    local itemID = CS.ItemIDFromText(query)
     if itemID then return ItemView(itemID) end
-    local hits = RS:SearchReagentsByName(query)
+    local hits = CS:SearchReagentsByName(query)
     if #hits == 1 then return ItemView(hits[1]) end
     return PickerView(hits, query)
 end
@@ -850,8 +850,8 @@ function Browser:Show(query, fromTyping)
     currentQuery = strtrim(query or "")
     if not fromTyping then
         -- show the item's name rather than item:123 or a raw link
-        local itemID = RS.ItemIDFromText(currentQuery) or tonumber(currentQuery:match("^made:(%d+)$"))
-        searchBox:SetText(itemID and RS:ItemName(itemID) or currentQuery)
+        local itemID = CS.ItemIDFromText(currentQuery) or tonumber(currentQuery:match("^made:(%d+)$"))
+        searchBox:SetText(itemID and CS:ItemName(itemID) or currentQuery)
     end
     Render(false)
 end
@@ -869,7 +869,7 @@ function Browser:OnEnable()
     self:RegisterBucketEvent("GET_ITEM_INFO_RECEIVED", 0.3, "ItemInfoReceived")
     -- Alt+Click any item (bags, bank, loot...) to look it up; Shift+Click drops it into a focused search box
     hooksecurefunc("HandleModifiedItemClick", function(link)
-        if not link or RS.IsSecret(link) or not link:find("item:") then return end
+        if not link or CS.IsSecret(link) or not link:find("item:") then return end
         if IsAltKeyDown() and not IsShiftKeyDown() and not IsControlKeyDown() then
             self:Show(link)
         elseif IsShiftKeyDown() and searchBox and searchBox:HasFocus() then

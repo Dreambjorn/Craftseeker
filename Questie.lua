@@ -1,12 +1,12 @@
--- Reagent Scout: creature, vendor, object and quest sources read from QuestieDB when it is installed
-local _, RS = ...
+-- Craftseeker: creature, vendor, object and quest sources read from QuestieDB when it is installed
+local _, CS = ...
 
 local CONTRACT = 4 -- QuestieDB public API version this file was written against
 local RANK = { [1] = "Elite", [2] = "Rare Elite", [3] = "Boss", [4] = "Rare" }
 local available
 
 -- QuestieDB is optional; without it the browser falls back to the built-in data
-function RS:HasQuestieDB()
+function CS:HasQuestieDB()
     if not available then
         local lib = _G.LibQuestieDB
         available = lib and lib.RequireContract and lib.RequireContract(CONTRACT) and ItemDB and NpcDB
@@ -39,7 +39,7 @@ local function FriendlyToMe(flag)
 end
 
 -- QuestieDB's name for a creature, or nil
-function RS:NpcName(npcID)
+function CS:NpcName(npcID)
     return self:HasQuestieDB() and NpcDB.Get(npcID, "name") or nil
 end
 
@@ -72,7 +72,7 @@ end
 
 -- Where an item comes from, per QuestieDB; nil when QuestieDB is missing or knows nothing.
 -- drops and vendors: { npc, name, level, rank, zones }; objects: { name, zones }; quests: { name, level, zone }
-function RS:GetQuestieSources(itemID)
+function CS:GetQuestieSources(itemID)
     if not itemID or not self:HasQuestieDB() or not ItemDB.Exists(itemID) then return nil end
     local out = {
         drops = NpcEntries(ItemDB.Get(itemID, "npcDrops")),

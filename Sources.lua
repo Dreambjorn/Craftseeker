@@ -1,17 +1,17 @@
--- Reagent Scout: records where reagents came from (vendors, loot, gathering, fishing)
-local _, RS = ...
-local Sources = RS:NewModule("Sources", "AceEvent-3.0")
+-- Craftseeker: records where reagents came from (vendors, loot, gathering, fishing)
+local _, CS = ...
+local Sources = CS:NewModule("Sources", "AceEvent-3.0")
 
 local guidNames, guidCount = {}, 0 -- creature GUID -> name, from target and mouseover
 local lastCast                     -- last spell target, e.g. "Copper Vein"
 local lootCounted = false          -- LOOT_READY can fire more than once for one loot window
 
 local function Tracking()
-    return RS.data.settings.sources
+    return CS.data.settings.sources
 end
 
 local function Bucket(itemID, kind)
-    local all = RS.data.sources
+    local all = CS.data.sources
     local s = all[itemID]
     if not s then
         s = {}
@@ -36,9 +36,9 @@ end
 
 local function Remember(unit)
     local guid = UnitGUID(unit)
-    if not guid or RS.IsSecret(guid) or not IsNPCGUID(guid) or guidNames[guid] then return end
+    if not guid or CS.IsSecret(guid) or not IsNPCGUID(guid) or guidNames[guid] then return end
     local name = UnitName(unit)
-    if not name or RS.IsSecret(name) then return end
+    if not name or CS.IsSecret(name) then return end
     -- session-only cache; drop it rather than let it grow all evening
     if guidCount >= 1000 then
         wipe(guidNames)
@@ -53,19 +53,19 @@ function Sources:UPDATE_MOUSEOVER_UNIT() Remember("mouseover") end
 
 function Sources:UNIT_SPELLCAST_SENT(_, unit, target)
     -- the whole payload can be secret, and comparing a secret value errors
-    if RS.IsSecret(unit) or RS.IsSecret(target) or unit ~= "player" then return end
+    if CS.IsSecret(unit) or CS.IsSecret(target) or unit ~= "player" then return end
     lastCast = target and target ~= "" and { target = target, t = GetTime() } or nil
 end
 
 function Sources:MERCHANT_SHOW()
     if not Tracking() then return end
     local vendor = UnitName("npc")
-    if not vendor or RS.IsSecret(vendor) then return end
+    if not vendor or CS.IsSecret(vendor) then return end
     local key = vendor .. " (" .. Zone() .. ")"
     for i = 1, GetMerchantNumItems() do
         local itemID = GetMerchantItemID(i)
         -- only remember vendor sources for items we know are reagents
-        if itemID and RS.usedIn[itemID] then
+        if itemID and CS.usedIn[itemID] then
             local price = 0
             local ok, info = pcall(C_MerchantFrame.GetItemInfo, i)
             if ok and info and info.price then
@@ -78,7 +78,7 @@ function Sources:MERCHANT_SHOW()
 end
 
 local function RecordSource(itemID, guid)
-    if not guid or RS.IsSecret(guid) then return end
+    if not guid or CS.IsSecret(guid) then return end
     local kind = guid:match("^(%a+)")
     if kind == "Creature" or kind == "Vehicle" then
         local name = guidNames[guid]
@@ -96,11 +96,11 @@ local function RecordSource(itemID, guid)
 end
 
 local function NpcOf(guid)
-    if not guid or RS.IsSecret(guid) or not IsNPCGUID(guid) then return nil end
+    if not guid or CS.IsSecret(guid) or not IsNPCGUID(guid) then return nil end
     return tonumber((select(6, strsplit("-", guid))))
 end
 
--- Own drop counts feed RS:GetDropRates: every corpse in a loot window counts once as opened,
+-- Own drop counts feed CS:GetDropRates: every corpse in a loot window counts once as opened,
 -- and reagents and recipe items count per corpse they came from
 local function CountSlot(counts, opened, slot, itemID)
     local src = { GetLootSourceInfo(slot) }
@@ -117,8 +117,8 @@ local function CountSlot(counts, opened, slot, itemID)
                 c.opened = (c.opened or 0) + 1
                 c.name = c.name or guidNames[src[i]]
             end
-            RS.data.countsStamp = time()
-            if itemID and (RS.usedIn[itemID] or RS.recipeItems[itemID]) then
+            CS.data.countsStamp = time()
+            if itemID and (CS.usedIn[itemID] or CS.recipeItems[itemID]) then
                 c.items = c.items or {}
                 c.items[itemID] = (c.items[itemID] or 0) + 1
             end
@@ -133,9 +133,9 @@ function Sources:LOOT_READY()
     local opened = {}
     for slot = 1, GetNumLootItems() do
         local link = GetLootSlotLink(slot)
-        local itemID = link and RS.ItemIDFromText(link)
-        if not fishing then CountSlot(RS.data.counts, opened, slot, itemID) end
-        if itemID and RS.usedIn[itemID] then
+        local itemID = link and CS.ItemIDFromText(link)
+        if not fishing then CountSlot(CS.data.counts, opened, slot, itemID) end
+        if itemID and CS.usedIn[itemID] then
             if fishing then
                 Bump(Bucket(itemID, "fish"), Zone())
             else

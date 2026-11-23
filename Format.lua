@@ -1,11 +1,11 @@
--- Reagent Scout: recipe and source line text for the browser
-local _, RS = ...
+-- Craftseeker: recipe and source line text for the browser
+local _, CS = ...
 
 local GREEN = "|cff40ff40"
 local YELLOW = "|cffffd100"
 local GREY = "|cff9d9d9d"
 
-function RS:RecipeLine(recipeID, reagentID)
+function CS:RecipeLine(recipeID, reagentID)
     local rec = self.recipes[recipeID]
     local who, alt = self:WhoKnows(recipeID)
     local color = who == "me" and GREEN or who == "alt" and YELLOW or GREY
@@ -29,12 +29,12 @@ local function TopEntries(bucket, limit, fmt)
 end
 
 -- { label, text } pairs for where an item has come from
-function RS:SourceLines(itemID, limit)
+function CS:SourceLines(itemID, limit)
     local lines = {}
     local s = self.data.sources[itemID]
     if s then
         if s.vendor then
-            for _, t in ipairs(TopEntries(s.vendor, limit, function(k, v) return k .. "  " .. RS.Money(v) end)) do
+            for _, t in ipairs(TopEntries(s.vendor, limit, function(k, v) return k .. "  " .. CS.Money(v) end)) do
                 lines[#lines + 1] = { "Vendor", t }
             end
         end

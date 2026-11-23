@@ -1,9 +1,9 @@
--- Reagent Scout: recipe index and lookups
-local _, RS = ...
+-- Craftseeker: recipe index and lookups
+local _, CS = ...
 
-RS.recipes = {} -- [recipeID] = decoded record: built-in data, overlaid by what profession windows reported
-RS.usedIn = {}  -- [reagentItemID] = { recipeID, ... }
-RS.madeBy = {}  -- [outputItemID] = { recipeID, ... }
+CS.recipes = {} -- [recipeID] = decoded record: built-in data, overlaid by what profession windows reported
+CS.usedIn = {}  -- [reagentItemID] = { recipeID, ... }
+CS.madeBy = {}  -- [outputItemID] = { recipeID, ... }
 
 local FACTION_CODE = { Alliance = 1, Horde = 2 }
 
@@ -19,7 +19,7 @@ local function AddIndex(index, key, recipeID)
     list[#list + 1] = recipeID
 end
 
-function RS:IndexRecipe(recipeID, rec)
+function CS:IndexRecipe(recipeID, rec)
     for _, r in ipairs(rec.r or {}) do
         AddIndex(self.usedIn, r[1], recipeID)
     end
@@ -35,7 +35,7 @@ local function Decode(d)
     return { n = d[1], p = d[2], o = d[3], q = d[4], r = r }
 end
 
-function RS:RebuildIndex()
+function CS:RebuildIndex()
     wipe(self.usedIn)
     wipe(self.madeBy)
     wipe(self.recipes)
@@ -59,20 +59,20 @@ function RS:RebuildIndex()
     end
 end
 
-function RS:SetRecipe(recipeID, rec)
+function CS:SetRecipe(recipeID, rec)
     self.data.recipes[recipeID] = rec
     self.recipes[recipeID] = rec
     self:IndexRecipe(recipeID, rec)
 end
 
-function RS:CountRecipes()
+function CS:CountRecipes()
     local n = 0
     for _ in pairs(self.recipes) do n = n + 1 end
     return n
 end
 
 -- How a recipe is learned, from the built-in data; nil when unknown
-function RS:GetLearnInfo(recipeID)
+function CS:GetLearnInfo(recipeID)
     local s = self.BUILTIN_SOURCES and self.BUILTIN_SOURCES[recipeID]
     if not s then return nil end
     return {
@@ -84,7 +84,7 @@ end
 -- Players' measured WoW Forever drop rates for a recipe item: { { npc, name, chance %, kills }, ... }, best first
 -- Drop rates for an item: the built-in WoW Forever counts plus this account's own loot counts.
 -- { { npc, name, chance %, kills }, ... }, best first; nil when nobody has seen it drop
-function RS:GetDropRates(itemID)
+function CS:GetDropRates(itemID)
     local byNpc, out = {}, {}
     local r = self.BUILTIN_RATES and self.BUILTIN_RATES[itemID]
     for i = 1, r and #r or 0, 4 do
@@ -119,7 +119,7 @@ function RS:GetDropRates(itemID)
     return out
 end
 
-function RS.PlayerFaction()
+function CS.PlayerFaction()
     return FACTION_CODE[UnitFactionGroup("player")] or 0
 end
 
@@ -127,7 +127,7 @@ end
 local function ForMe(faction, mine)
     return faction == 0 or faction == mine
 end
-RS.ForMe = ForMe
+CS.ForMe = ForMe
 
 local function MapName(uiMap)
     local info = uiMap and uiMap > 0 and C_Map.GetMapInfo(uiMap)
@@ -137,7 +137,7 @@ end
 -- Trainers or vendors players saw, this character's faction only: { npc, name, zone, copper[, stack] }
 local function SeenNpcs(list, width)
     if not list then return nil end
-    local mine, out = RS.PlayerFaction(), {}
+    local mine, out = CS.PlayerFaction(), {}
     for i = 1, #list, width do
         if ForMe(list[i + 2], mine) then
             out[#out + 1] = { npc = list[i], name = list[i + 1], zone = MapName(list[i + 3]),
@@ -148,7 +148,7 @@ local function SeenNpcs(list, width)
 end
 
 -- Where a creature is, from the built-in data: zone names, or an instance name
-function RS:GetPlaces(npcID)
+function CS:GetPlaces(npcID)
     local p = self.BUILTIN_PLACES and self.BUILTIN_PLACES[npcID]
     if type(p) == "string" then return { p } end
     local out = {}
@@ -157,7 +157,7 @@ function RS:GetPlaces(npcID)
 end
 
 -- Quests that teach a recipe, this character's faction only: { quest, name, giver, zone, level }
-function RS:GetRecipeQuests(recipeID)
+function CS:GetRecipeQuests(recipeID)
     local q = self.BUILTIN_QUESTS and self.BUILTIN_QUESTS[recipeID]
     if not q then return nil end
     local mine, out = self.PlayerFaction(), {}
@@ -170,16 +170,16 @@ function RS:GetRecipeQuests(recipeID)
     return #out > 0 and out or nil
 end
 
-function RS:GetTrainers(recipeID)
+function CS:GetTrainers(recipeID)
     return SeenNpcs(self.BUILTIN_TRAINERS and self.BUILTIN_TRAINERS[recipeID], 5)
 end
 
-function RS:GetVendors(itemID)
+function CS:GetVendors(itemID)
     return SeenNpcs(self.BUILTIN_VENDORS and self.BUILTIN_VENDORS[itemID], 6)
 end
 
 -- False for recipes only the opposite faction can learn; the factions can't trade with each other.
-function RS:IsObtainable(recipeID)
+function CS:IsObtainable(recipeID)
     local info = self:GetLearnInfo(recipeID)
     if not info then return true end
     local mine = self.PlayerFaction()
@@ -199,19 +199,19 @@ function RS:IsObtainable(recipeID)
     return false
 end
 
-function RS:ItemName(itemID)
+function CS:ItemName(itemID)
     local baked = self.BUILTIN_ITEMS and self.BUILTIN_ITEMS[itemID]
     return C_Item.GetItemNameByID(itemID) or (baked and baked[1])
 end
 
 -- Built-in quality first: the client's answer arrives late for uncached items
-function RS:ItemQuality(itemID)
+function CS:ItemQuality(itemID)
     local baked = self.BUILTIN_ITEMS and self.BUILTIN_ITEMS[itemID]
     return (baked and baked[2]) or C_Item.GetItemQualityByID(itemID)
 end
 
 -- Who knows a recipe? returns "me", "alt" (with name), or nil
-function RS:WhoKnows(recipeID)
+function CS:WhoKnows(recipeID)
     local me = self.CharKey()
     local known = self.data.known
     if rawget(known, me) and known[me][recipeID] then return "me" end
@@ -248,21 +248,21 @@ local function Obtainable(self, list)
     return out
 end
 
-function RS:GetUses(itemID)
+function CS:GetUses(itemID)
     return Obtainable(self, self.usedIn[itemID])
 end
 
-function RS:GetMakers(itemID)
+function CS:GetMakers(itemID)
     return Obtainable(self, self.madeBy[itemID])
 end
 
-function RS.ReagentQty(rec, itemID)
+function CS.ReagentQty(rec, itemID)
     for _, r in ipairs(rec.r or {}) do
         if r[1] == itemID then return r[2], r[3] end
     end
 end
 
-function RS.ItemIDFromText(text)
+function CS.ItemIDFromText(text)
     if not text or text == "" then return nil end
     local id = text:match("item:(%d+)")
     if id then return tonumber(id) end
@@ -271,7 +271,7 @@ function RS.ItemIDFromText(text)
 end
 
 -- Reagent itemIDs whose name contains the search text and that this character can use
-function RS:SearchReagentsByName(text)
+function CS:SearchReagentsByName(text)
     text = text:lower()
     local hits, names = {}, {}
     for itemID in pairs(self.usedIn) do

@@ -1,9 +1,9 @@
-# Reagent Scout (WoW: Forever)
+# Craftseeker (WoW: Forever)
 
 Alt+Click any crafting reagent to see every recipe it goes into, how to learn each one, and where you've found the reagent before. Item tooltips are left untouched.
 
 ## Install
-1. Unzip so you have `World of Warcraft\_forever_\Interface\AddOns\ReagentScout\ReagentScout.toc`
+1. Unzip so you have `World of Warcraft\_forever_\Interface\AddOns\Craftseeker\Craftseeker.toc`
 2. Restart the game (or `/reload` if it was already running when you copied it in).
 
 ## How it learns
@@ -13,7 +13,7 @@ Alt+Click any crafting reagent to see every recipe it goes into, how to learn ea
 - **Trainers and vendors:** the trainers and vendors WoW Forever players saw (EG Link), by name, zone and price.
 - **Quests and places:** quests that teach a recipe, with who gives them and where, and the zone or instance of each creature (AllTheThings, Drop Tables).
 - **Your own loot:** every corpse you loot is counted, so drop rates keep improving as you play; your counts are added to the built-in ones.
-- **Sharing:** Reagent Scout users in your guild, your group and your friends lists (Battle.net friends too) trade their loot counts, so everyone's drop rates grow together. Your counts are announced when you log in, when you join a group or someone joins yours, when a friend comes online, and after new loot. Each user's counts are capped, and `/rs share` turns it off.
+- **Sharing:** Craftseeker users in your guild, your group and your friends lists (Battle.net friends too) trade their loot counts, so everyone's drop rates grow together. Your counts are announced when you log in, when you join a group or someone joins yours, when a friend comes online, and after new loot. Each user's counts are capped, and `/cs share` turns it off.
 - **Faction:** recipes only the opposite faction can learn are hidden, and so are the opposite faction's vendors and quests. The factions can't trade, so a reagent only the opposite faction's recipes use says so.
 - **Profession windows:** opening one of your profession windows marks which recipes each character knows, adds any recipe the game data missed, and hides built-in recipes that window does not list.
 - **Linked professions:** a profession link from chat adds its recipes too.
@@ -23,12 +23,12 @@ Alt+Click any crafting reagent to see every recipe it goes into, how to learn ea
 - **Alt+Click** an item in your bags to open the browser. It looks like the profession window: recipes grouped by profession on the left, the selected recipe's reagents and how to learn it on the right. The right side scrolls: creatures, vendors and trainers are listed in tables, best drop rate first, with a button to show the rest of a long one; hover a row for all its zones.
 - **Click** an item in the window for the recipes that use it; **right-click** it for the recipes that make it.
   - Green: this character knows it. Yellow: an alt knows it. Grey: none of your characters know it yet.
-- `/rs` or the minimap button opens the browser. Type a name, or Shift+Click an item into the search box.
-- **Settings** are under Options > AddOns > Reagent Scout (`/rs options`, or right-click the minimap button): the minimap button, source tracking and sharing. `/rs minimap` shows or hides the button.
-- `/rs help` lists the commands. `/rs stats` shows what's been learned so far, and from how many other users.
+- `/cs` or the minimap button opens the browser. Type a name, or Shift+Click an item into the search box.
+- **Settings** are under Options > AddOns > Craftseeker (`/cs options`, or right-click the minimap button): the minimap button, source tracking and sharing. `/cs minimap` shows or hides the button.
+- `/cs help` lists the commands. `/cs stats` shows what's been learned so far, and from how many other users.
 
 ## Code layout
-Built on Ace3 (`Libs\`): AceAddon for the addon object and modules, AceDB for saved data, AceEvent and AceBucket for events, AceConsole for `/rs`; LibDataBroker and LibDBIcon for the minimap button.
+Built on Ace3 (`Libs\`): AceAddon for the addon object and modules, AceDB for saved data, AceEvent and AceBucket for events, AceConsole for `/cs`; LibDataBroker and LibDBIcon for the minimap button.
 
 - `Core.lua` - addon object, saved-data defaults, slash commands
 - `Recipes.lua` - recipe index, lookups, faction filter

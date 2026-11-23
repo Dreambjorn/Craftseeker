@@ -1,5 +1,5 @@
 -- Generated from game data (wowf 1.60.1.71037) and a curated Forever recipe list; do not edit by hand
-local _, RS = ...
+local _, CS = ...
 local P = { "Alchemy", "Blacksmithing", "Cooking", "Enchanting", "Engineering", "First Aid", "Fishing", "Herbalism", "Leatherworking", "Mining", "Poisons", "Skinning", "Tailoring" }
 -- [recipeID] = { name, profession, outputItemID, outputQty, { itemID, qty, ... } }
 local D = {
@@ -12529,6 +12529,6 @@ local Q = {
 [1302598]={95217,"The Quarry's Smith","Frast Dokner",1426,1,7,96874,"This Is Spinal Axe","Ug'thok",1454,2,6},
 [1302604]={96875,"Beasts of Thunder Ridge","Kamari",1454,2,6},
 }
-RS.BUILTIN, RS.BUILTIN_SOURCES, RS.BUILTIN_ITEMS, RS.BUILTIN_RATES = D, S, I, R
-RS.BUILTIN_TRAINERS, RS.BUILTIN_VENDORS, RS.BUILTIN_PLACES, RS.BUILTIN_QUESTS = T, V, Z, Q
-RS.BUILTIN_BUILD = "1.60.1.71037"
+CS.BUILTIN, CS.BUILTIN_SOURCES, CS.BUILTIN_ITEMS, CS.BUILTIN_RATES = D, S, I, R
+CS.BUILTIN_TRAINERS, CS.BUILTIN_VENDORS, CS.BUILTIN_PLACES, CS.BUILTIN_QUESTS = T, V, Z, Q
+CS.BUILTIN_BUILD = "1.60.1.71037"
