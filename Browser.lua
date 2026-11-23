@@ -254,10 +254,18 @@ local function LearnLines(recipeID, rec)
         local zones = AreaList(info.quests, 3, true)
         if zones ~= "" or #info.quests == 0 then lines[#lines + 1] = "Quest" .. (zones ~= "" and (": " .. zones) or "") end
     end
+    local rates = info.teach > 0 and RS:GetDropRates(info.teach)
     if qs and #qs.drops > 0 then
         AddZoneGroups(lines, "Drops from:", qs.drops, 4, 4)
-    elseif how:find("d") then
+    elseif how:find("d") and not rates then
         lines[#lines + 1] = "Drops from creatures"
+    end
+    if rates then
+        lines[#lines + 1] = "Drop rates seen by WoW Forever players:"
+        for _, r in ipairs(rates) do
+            lines[#lines + 1] = ("   %s  %s%.2f%%|r  %s(%d kills)|r"):format(r.name ~= "" and r.name or ("NPC " .. r.npc),
+                GOLD, r.chance, GREY, r.kills)
+        end
     end
     if qs and #qs.objects > 0 then
         AddZoneGroups(lines, "Found in:", qs.objects, 3, 3)

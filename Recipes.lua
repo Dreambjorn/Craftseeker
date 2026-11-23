@@ -77,6 +77,17 @@ function RS:GetLearnInfo(recipeID)
     }
 end
 
+-- Players' measured WoW Forever drop rates for a recipe item: { { npc, name, chance %, kills }, ... }, best first
+function RS:GetDropRates(itemID)
+    local r = self.BUILTIN_RATES and self.BUILTIN_RATES[itemID]
+    if not r then return nil end
+    local out = {}
+    for i = 1, #r, 4 do
+        out[#out + 1] = { npc = r[i], name = r[i + 1], chance = r[i + 2] / 100, kills = r[i + 3] }
+    end
+    return out
+end
+
 function RS.PlayerFaction()
     return FACTION_CODE[UnitFactionGroup("player")] or 0
 end

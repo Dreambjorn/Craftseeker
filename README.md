@@ -9,6 +9,7 @@ Alt+Click any crafting reagent to see every recipe it goes into, how to learn ea
 ## How it learns
 - **Built-in recipes:** `Data.lua` holds every Forever profession recipe (about 2,200) with its reagents, and how it is learned: trainer and cost, recipe item, vendor zones, quests, reputation and Merchant's Favor. Every reagent works from the first login.
 - **QuestieDB (optional):** when Questie's database addon is installed, recipe items list the creatures that drop them (with level, rank and zone), the vendors that sell them by name and zone, and the quests that reward them. Reagents list their vendors too. Nothing is copied from it; it is read in game.
+- **Drop rates:** for about 110 recipe items, the chance per creature that WoW Forever players measured (Drop Tables and Polestar recordings), with the kills it is based on. Rare drops often have no measured rate yet.
 - **Faction:** recipes only the other faction can learn are hidden, and so are the other faction's vendors and quests.
 - **Profession windows:** opening one of your profession windows marks which recipes each character knows, adds any recipe the game data missed, and hides built-in recipes that window does not list.
 - **Linked professions:** a profession link from chat adds its recipes too.
@@ -31,3 +32,8 @@ Built on Ace3 (`Libs\`): AceAddon for the addon object and modules, AceDB for sa
 - `Scanner.lua` - module: learns from profession windows
 - `Sources.lua` - module: records vendors, loot, gathering and fishing
 - `Browser.lua` - module: the window
+
+## Credits
+- Drop rates: Drop Tables contributors, https://github.com/valcheffnet/DropTables (CC BY-SA 4.0), and the Polestar authors' Recorder sessions, https://github.com/fitzforge/polestar (CC BY 4.0). The rate table is shared under CC BY-SA 4.0.
+- Recipe sources: WhatsTraining, https://github.com/fusionpit/WhatsTraining (MIT).
+- Full notices: `LICENSE-DATA.md`.
