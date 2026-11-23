@@ -12,6 +12,7 @@ local defaults = {
         counts = {},               -- [npcID] = { name, opened = corpses looted, items = { [itemID] = drops } }
         shared = {},               -- [install] = { stamp, from, counts }: other Reagent Scout users' counts
         settings = { sources = true, share = true },
+        minimap = { hide = false },  -- LibDBIcon's button position and visibility
     },
 }
 
@@ -60,6 +61,8 @@ function RS:SlashCommand(input)
         print("  /rs <item link, ID or name>  - look up a reagent")
         print("  /rs sources  - turn source tracking on/off")
         print("  /rs share  - turn sharing loot counts with guild, group and friends on/off")
+        print("  /rs options  - open the settings (also under Options > AddOns)")
+        print("  /rs minimap  - show or hide the minimap button")
         print("  /rs stats  - what's been learned so far")
         print("  /rs reset  - wipe all learned data")
         print("  Alt+Click an item in your bags to look it up.")
@@ -69,6 +72,10 @@ function RS:SlashCommand(input)
     elseif cmd == "share" then
         data.settings.share = not data.settings.share
         self:Print("sharing loot counts", data.settings.share and "on" or "off")
+    elseif cmd == "options" or cmd == "config" then
+        self:OpenSettings()
+    elseif cmd == "minimap" then
+        self:SetMinimapButton(data.minimap.hide)
     elseif cmd == "stats" then
         local profs = {}
         for _, rec in pairs(self.recipes) do
