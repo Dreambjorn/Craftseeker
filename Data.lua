@@ -8669,7 +8669,8 @@ local R = {
 }
 -- Gathering players measured on WoW Forever: Drop Tables skinning counts (CC BY-SA 4.0) and Polestar
 -- node and chest windows (CC BY 4.0), reagents only. kind 1 creature (skinned), 2 object; profession 1
--- Skinning, 2 Mining, 3 Herbalism, 4 Chest. [itemID] = { kind, id, profession, chance in hundredths, times, ... }
+-- Skinning, 2 Mining, 3 Herbalism, 4 Chest. This table is shared under CC BY-SA 4.0; see LICENSE-DATA.md.
+-- [itemID] = { kind, id, profession, chance in hundredths, times, ... }
 local G = {
 [118]={2,106318,3,7500,413,2,106319,3,1538,476},
 [159]={2,106318,3,2500,413},
