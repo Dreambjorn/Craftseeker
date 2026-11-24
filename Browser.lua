@@ -478,16 +478,16 @@ local function AddGathering(itemID, name)
             zones = qzones and #qzones > 0 and qzones or CS:SeenObjectZones(g.id)
             pin = qpin or CS:SeenObjectPin(g.id)
         end
-        local how = g.p and (GREY .. " (" .. g.p .. ")|r") or ""
         local tip = { label .. (g.p and (" - " .. g.p) or ""),
             #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded",
             ("%.2f%% over %d times gathered"):format(g.chance, g.k) }
         if g.own > 0 then tip[#tip + 1] = ("%d of those are your own"):format(g.own) end
-        rows[#rows + 1] = { cells = { label .. how, "", ZoneCell(zones), ("%s%.2f%%|r"):format(GOLD, g.chance),
+        -- the profession sits in the level column, so names keep their room
+        rows[#rows + 1] = { cells = { label, g.p and (GREY .. g.p .. "|r") or "", ZoneCell(zones), ("%s%.2f%%|r"):format(GOLD, g.chance),
             ("%s(%d)|r"):format(GREY, g.k) }, tip = tip, pin = pin }
     end
     AddHeading(("%s gathered from %d source%s"):format(name, #rows, #rows == 1 and "" or "s"))
-    AddTable({ "Source", "", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources")
+    AddTable({ "Source", "How", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources")
     return true
 end
 
