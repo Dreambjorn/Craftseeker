@@ -265,9 +265,13 @@ local function BuildGather(self)
     end
     -- built-in counts (Drop Tables' skinning database, Polestar's nodes and chests); Drop Tables users' live skinning
     -- replaces a creature's built-in figure once it holds more skins, never adds: the database holds the same installs
-    local live, builtin = {}, {}
+    local live, liveItems, builtin = {}, {}, {}
     for npc, origins in pairs(self.data.bridges.dtSkins or {}) do
-        for _, e in pairs(origins) do live[npc] = (live[npc] or 0) + e.k end
+        liveItems[npc] = {}
+        for _, e in pairs(origins) do
+            live[npc] = (live[npc] or 0) + e.k
+            for item in pairs(e.i or {}) do liveItems[npc][item] = true end
+        end
     end
     local gathered = self.BUILTIN_GATHER or {}
     for _, list in pairs(gathered) do
@@ -278,7 +282,9 @@ local function BuildGather(self)
     for item, list in pairs(gathered) do
         for i = 1, #list, 5 do
             local kind, id, times = list[i], list[i + 1], list[i + 4]
-            if kind ~= 1 or (live[id] or 0) <= builtin[id] then
+            -- live counts replace an item's built-in figure only when they hold that item; otherwise it stays
+            local replaced = kind == 1 and (live[id] or 0) > builtin[id] and liveItems[id][item]
+            if not replaced then
                 AddGather(othersGather, kind == 1 and "k" or "g", id,
                     { p = GATHER_PROF[list[i + 2]], k = times, i = { [item] = list[i + 3] / 10000 * times } }, false)
             end
