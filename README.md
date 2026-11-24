@@ -37,6 +37,10 @@ Reagents in your bags and bank get one line in their tooltip, saying how many re
 
 ---
 
+Craftseeker works on its own. With [QuestieDB](https://github.com/Questie/QuestieDB) installed, it also lists the creatures, vendors, chests and quests QuestieDB knows about, so the lists are fuller from day one.
+
+---
+
 ## Commands:
 
 - ` /cs ` — Open Craftseeker
