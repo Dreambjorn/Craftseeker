@@ -56,7 +56,7 @@ Reagents in your bags and bank get one line in their tooltip, saying how many re
 
 **Q: Why don't I see the opposite faction's recipes?**
 
-**A:** The factions can't trade, so those recipes are hidden. Tick "Show opposite faction" in the settings to list them.
+**A:** The factions can't trade, so those recipes are hidden. Tick "Show opposite faction" in the settings to list them; they carry the opposite faction's emblem.
 
 <br>
 

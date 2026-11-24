@@ -38,12 +38,14 @@ local function ShowItemTooltip(self)
     else
         return
     end
-    -- a blue recipe name: which alts know it
-    local alts = self.recipeID and CS:AltsKnowing(self.recipeID)
-    if alts and #alts > 0 then
-        GameTooltip:AddLine("Known by " .. table.concat(alts, ", "), 0.4, 0.73, 1)
-        GameTooltip:Show()
+    if not self.recipeID then return end
+    -- a blue recipe name: which alts know it; a faction emblem: only the opposite faction learns it
+    local alts = CS:AltsKnowing(self.recipeID)
+    if #alts > 0 then GameTooltip:AddLine("Known by " .. table.concat(alts, ", "), 0.4, 0.73, 1) end
+    if CS:WhoKnows(self.recipeID) ~= "me" and not CS:IsObtainable(self.recipeID) then
+        GameTooltip:AddLine("Only the opposite faction can learn this", 1, 0.25, 0.25)
     end
+    GameTooltip:Show()
 end
 
 -- Right-click: the recipes that make the item
@@ -896,6 +898,7 @@ function DrawDetail(keep)
         AddText(RED .. "Red name|r  Your skill is too low")
         AddText("|A:common-icon-checkmark:14:14|a  You know this recipe")
         AddText("|cff66bbffBlue name|r  One of your alts knows it (hover to see who)")
+        AddText((CS.PlayerFaction() == 2 and "|A:AllianceSymbol:16:16|a" or "|A:HordeSymbol:16:16|a") .. "  Only the opposite faction can learn it")
         content:SetHeight(-cursor)
         return
     end

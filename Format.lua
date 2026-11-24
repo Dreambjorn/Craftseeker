@@ -23,8 +23,11 @@ function CS:RecipeLine(recipeID, reagentID)
     local _, optional = self.ReagentQty(rec, reagentID)
     local text = color .. (rec.n or "?") .. "|r"
     if optional then text = text .. GREY .. " (optional)|r" end
-    if who ~= "me" and not self:IsObtainable(recipeID) then text = text .. GREY .. " (opposite faction)|r" end
+    -- the opposite faction's emblem instead of a long note, so the name keeps its room; the tooltip says why
     local right = who == "me" and KNOWN or nil
+    if who ~= "me" and not self:IsObtainable(recipeID) then
+        right = self.PlayerFaction() == 2 and "|A:AllianceSymbol:16:16|a" or "|A:HordeSymbol:16:16|a"
+    end
     return (rec.p or "?"), text, right, self.SKILL_ATLAS[diff or ""]
 end
 
