@@ -79,9 +79,11 @@ Reagents in your bags and bank get one line in their tooltip, saying how many re
 ## Credits
 
 - Drop rates and skinning: Drop Tables contributors, https://github.com/valcheffnet/DropTables (CC BY-SA 4.0), and the Polestar authors' Recorder sessions, https://github.com/fitzforge/polestar (CC BY 4.0). The rate, gathering and creature-place tables are shared under CC BY-SA 4.0.
+- Drop Tables' database also carries data from Blackthornes Farmer, https://github.com/Blackthornes/Blackthornes_Farmer (MIT), and Everloot, https://everloot.app (CC BY-SA 4.0).
 - Recipe sources: WhatsTraining, https://github.com/fusionpit/WhatsTraining (MIT).
 - Trainers, vendors and creature names: Data from Efficient Games (https://efficient.games), licensed under CC BY 4.0.
 - Creature places, quest names and givers: AllTheThings, https://github.com/ATTWoWAddon/AllTheThings (MIT).
+- Libraries: Ace3, LibDataBroker, LibDBIcon, ChatThrottleLib and LibDeflate, each under its own licence in `Libs`.
 - Full notices: `LICENSE-DATA.md`.
 
 ## License
