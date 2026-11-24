@@ -3,6 +3,8 @@ Craftseeker is a reagent and recipe browser for WoW: Forever, laid out like the 
 
 Alt+Click any crafting reagent in your bags to see every recipe it goes into, how to learn each one, and where to get the reagent — vendors, drops, gathering and chests, with drop rates measured by players.
 
+<img width="1031" height="775" alt="image" src="https://github.com/user-attachments/assets/7533968a-84de-4faf-aeec-1d68082ed020" />
+
 ---
 What it shows:
 
@@ -15,15 +17,23 @@ What it shows:
 - How many of each reagent you carry, in your bags, bank and on your alts
 - Map pins for trainers, vendors and creatures (TomTom too, when installed)
 
+<img width="1031" height="778" alt="image" src="https://github.com/user-attachments/assets/d869eef9-2a24-4be4-a0f3-d5f7a056ee1f" />
+
 ---
 
 The start page lists the reagents in your bags and bank. Search for any reagent, recipe or crafted item, and narrow every list with the Filter button: your professions only, recipes with a skill-up, recipes you don't know yet, or recipes you have the materials for. Favorite a recipe to keep it at the top, or track it in the objective tracker.
+
+<img width="1041" height="781" alt="image" src="https://github.com/user-attachments/assets/bddf3152-b3a0-4453-8c48-45ad25e8186d" />
 
 ---
 
 Drop rates keep improving as you play. Every corpse you loot and every node you gather is counted, and Craftseeker shares those counts with other Craftseeker users online — both factions, your guild, group and friends. It also reads the counts Drop Tables and Forever Drops users share, and fills in levels, zones and vendor prices the game data leaves blank.
 
+<img width="272" height="123" alt="image" src="https://github.com/user-attachments/assets/af5c168e-70e4-47ed-8814-5c8a6236b73f" />
+
 Reagents in your bags and bank get one line in their tooltip, saying how many recipes use them; nothing else touches item tooltips.
+
+<img width="283" height="177" alt="image" src="https://github.com/user-attachments/assets/e3354add-ab24-40c7-8866-3acfc5ea3d33" />
 
 ---
 
