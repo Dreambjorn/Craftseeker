@@ -38,18 +38,55 @@ local function FriendlyToMe(flag)
     return flag == (UnitFactionGroup("player") == "Horde" and "H" or "A")
 end
 
+-- A map pin from QuestieDB spawns ({ [areaID] = { { x, y }, ... } }), on a zone the built-in data can map
+local function SpawnPin(spawns)
+    if type(spawns) ~= "table" then return nil end
+    local maps = CS.BUILTIN_AREAMAPS or {}
+    for areaID, points in pairs(spawns) do
+        local p = maps[areaID] and type(points) == "table" and points[1]
+        if type(p) == "table" and p[1] and p[2] and p[1] > 0 then return { maps[areaID], p[1] / 100, p[2] / 100 } end
+    end
+end
+
 -- QuestieDB's name for a creature, or nil
 function CS:NpcName(npcID)
-    return self:HasQuestieDB() and NpcDB.Get(npcID, "name") or nil
+    return npcID and self:HasQuestieDB() and NpcDB.Get(npcID, "name") or nil
+end
+
+-- QuestieDB's name, zones and map pin for a node or chest, or nil
+function CS:ObjectInfo(objectID)
+    if not objectID or not self:HasQuestieDB() then return nil end
+    local name = ObjectDB.Get(objectID, "name")
+    if not name then return nil end
+    local spawns = ObjectDB.Get(objectID, "spawns")
+    return name, Zones(spawns, ObjectDB.Get(objectID, "zoneID")), SpawnPin(spawns)
+end
+
+-- QuestieDB's zones for a creature (dungeon bosses have a main zone but often no spawns), or nil
+function CS:NpcZones(npcID)
+    if not npcID or not self:HasQuestieDB() then return nil end
+    local zones = Zones(NpcDB.Get(npcID, "spawns"), NpcDB.Get(npcID, "zoneID"))
+    return #zones > 0 and zones or nil
+end
+
+local function Level(id)
+    local minL, maxL = NpcDB.Get(id, "minLevel"), NpcDB.Get(id, "maxLevel")
+    return minL and minL > 0 and (maxL and maxL > minL and (minL .. "-" .. maxL) or tostring(minL)) or nil
+end
+
+-- QuestieDB's level range ("16-17") and rank for a creature, for rows that came from drop counts alone
+function CS:NpcLevel(npcID)
+    if not npcID or not self:HasQuestieDB() then return nil end
+    return Level(npcID), RANK[NpcDB.Get(npcID, "rank")]
 end
 
 local function NpcEntry(id)
     local name = NpcDB.Get(id, "name")
     if not name then return nil end
-    local minL, maxL = NpcDB.Get(id, "minLevel"), NpcDB.Get(id, "maxLevel")
-    local level = minL and minL > 0 and (maxL and maxL > minL and (minL .. "-" .. maxL) or tostring(minL)) or nil
+    local level = Level(id)
+    local spawns = NpcDB.Get(id, "spawns")
     return { npc = id, name = name, level = level, rank = RANK[NpcDB.Get(id, "rank")],
-        zones = Zones(NpcDB.Get(id, "spawns"), NpcDB.Get(id, "zoneID")) }
+        zones = Zones(spawns, NpcDB.Get(id, "zoneID")), pin = SpawnPin(spawns) or CS:GetPin(id) }
 end
 
 local function NpcEntries(ids, onlyFriendly)
@@ -72,8 +109,8 @@ end
 
 -- Where an item comes from, per QuestieDB; nil when QuestieDB is missing or knows nothing.
 -- drops and vendors: { npc, name, level, rank, zones }; objects: { name, zones }; quests: { name, level, zone }
-function CS:GetQuestieSources(itemID)
-    if not itemID or not self:HasQuestieDB() or not ItemDB.Exists(itemID) then return nil end
+local function Lookup(self, itemID)
+    if not ItemDB.Exists(itemID) then return nil end
     local out = {
         drops = NpcEntries(ItemDB.Get(itemID, "npcDrops")),
         vendors = NpcEntries(ItemDB.Get(itemID, "vendors"), true),
@@ -83,7 +120,9 @@ function CS:GetQuestieSources(itemID)
     for _, id in ipairs(ItemDB.Get(itemID, "objectDrops") or {}) do
         local name = ObjectDB.Get(id, "name")
         if name then
-            out.objects[#out.objects + 1] = { name = name, zones = Zones(ObjectDB.Get(id, "spawns"), ObjectDB.Get(id, "zoneID")) }
+            local spawns = ObjectDB.Get(id, "spawns")
+            out.objects[#out.objects + 1] = { id = id, name = name, zones = Zones(spawns, ObjectDB.Get(id, "zoneID")),
+                pin = SpawnPin(spawns) }
         end
     end
     local quests = ItemDB.Get(itemID, "questRewards") or {}
@@ -97,9 +136,23 @@ function CS:GetQuestieSources(itemID)
             local starters = QuestDB.Get(id, "startedBy") -- { npcs, objects, items }
             local giver = starters and starters[1] and starters[1][1] and NpcEntry(starters[1][1])
             out.quests[#out.quests + 1] = { name = name, level = level and level > 0 and level or nil,
-                giver = giver and giver.name, zone = giver and giver.zones[1] or (sort and sort > 0 and ZoneName(sort)) or nil }
+                giver = giver and giver.name, zone = giver and giver.zones[1] or (sort and sort > 0 and ZoneName(sort)) or nil,
+                pin = giver and giver.pin }
         end
     end
     if #out.drops + #out.vendors + #out.objects + #out.quests == 0 then return nil end
     return out
+end
+
+-- QuestieDB's data doesn't change during a session, and an item can drop from hundreds of creatures, so each item is
+-- looked up once; callers copy what they change
+local cache = {}
+function CS:GetQuestieSources(itemID)
+    if not itemID or not self:HasQuestieDB() then return nil end
+    local hit = cache[itemID]
+    if hit == nil then
+        hit = Lookup(self, itemID) or false
+        cache[itemID] = hit
+    end
+    return hit or nil
 end
