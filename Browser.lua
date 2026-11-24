@@ -2,12 +2,12 @@
 local _, CS = ...
 local Browser = CS:NewModule("Browser", "AceEvent-3.0", "AceBucket-3.0")
 
-local HEADER_H, ROW_H, SPACER_H = 26, 24, 8
+local HEADER_H, ROW_H, SPACER_H = 25, 24, 8 -- the profession window's header; rows a little airier
 local LIST_W = 274
 local SLOT = 44 -- one size for output, reagents and recipe item, like the profession window
 local REAGENT_STEP, REAGENT_COL = 54, 250
-local DEFAULT_ICON = "Interface\\Icons\\INV_Misc_Bag_10"
-local GREY, GOLD = "|cff9d9d9d", "|cffffd100"
+local DEFAULT_ICON = "Interface\\Icons\\INV_Misc_Bag_Hearthstone"
+local GREY, GOLD, RED = "|cff9d9d9d", "|cffffd100", "|cffff4040"
 local FACTION_NAME = { "Alliance", "Horde" }
 
 local f, searchBox, title, summary, scrollBox, listEmpty
@@ -16,8 +16,15 @@ local currentQuery, currentItem, selectedRecipe
 local collapsed = {} -- [section title] = true, kept for the session
 local expanded = {}  -- [table] = true: shown in full, until another recipe is picked
 local madeView       -- the list shows the recipes that make currentItem, not those that use it
+local picking        -- search results with recipes in them: the first one is shown on the right
+local AddSkill
 local TABLE_ROWS = 10
-local Render, ShowDetail
+local Render, ShowDetail, DrawDetail
+local FILTERS = { { "mine", "My professions only" }, { "skillUp", "Has skill up" }, { "unknown", "Not known yet" },
+    { "materials", "Have materials" } }
+local FILTERED = "No recipe matches the filters."
+local SKILL_ORDER = { orange = 1, yellow = 2, green = 3, grey = 4, none = 5, learn = 6 }
+local FAVORITES = "Favorites" -- the first section, like the profession window's
 
 local function ShowItemTooltip(self)
     if self.itemID then
@@ -27,6 +34,14 @@ local function ShowItemTooltip(self)
     elseif self.spellID then
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetSpellByID(self.spellID)
+        GameTooltip:Show()
+    else
+        return
+    end
+    -- a blue recipe name: which alts know it
+    local alts = self.recipeID and CS:AltsKnowing(self.recipeID)
+    if alts and #alts > 0 then
+        GameTooltip:AddLine("Known by " .. table.concat(alts, ", "), 0.4, 0.73, 1)
         GameTooltip:Show()
     end
 end
@@ -51,8 +66,30 @@ end
 
 -- List ---------------------------------------------------------------------
 
+-- Right-click on a recipe: favourite, track, or the recipes that make its item, like the profession window's menu
+local function RecipeMenu(row)
+    local recipeID, made = row.recipeID, row.lookup or row.itemID
+    MenuUtil.CreateContextMenu(row, function(_, root)
+        root:CreateButton(CS:IsFavorite(recipeID) and "Remove from favorites" or "Add to favorites", function()
+            CS:SetFavorite(recipeID, not CS:IsFavorite(recipeID))
+            Render(true)
+        end)
+        if CS:CanTrack(recipeID) then
+            root:CreateButton(CS:IsTracked(recipeID) and "Untrack recipe" or "Track recipe", function()
+                CS:SetTracked(recipeID, not CS:IsTracked(recipeID))
+                ShowDetail(true)
+            end)
+        end
+        if made then
+            root:CreateButton("Recipes that make it", function() Browser:Show("made:" .. made) end)
+        end
+    end)
+end
+
 local function OnRowClick(self, button)
-    if self.recipeID and not IsShiftKeyDown() and button ~= "RightButton" then
+    if self.recipeID and button == "RightButton" and not IsShiftKeyDown() then
+        RecipeMenu(self)
+    elseif self.recipeID and not IsShiftKeyDown() and button ~= "RightButton" then
         selectedRecipe = self.recipeID
         scrollBox:ForEachFrame(function(frame)
             if frame.Selected then frame.Selected:SetShown(frame.recipeID ~= nil and frame.recipeID == selectedRecipe) end
@@ -74,12 +111,14 @@ local function InitRow(row, data)
         row.Highlight:SetAllPoints()
         row.Highlight:SetAlpha(0.5)
         row.Icon = row:CreateTexture(nil, "ARTWORK")
-        row.Icon:SetSize(20, 20)
-        row.Icon:SetPoint("LEFT", 10, 0)
+        row.Icon:SetSize(16, 16)
+        row.SkillUp = row:CreateTexture(nil, "OVERLAY")
+        row.SkillUp:SetSize(13, 15)
+        row.SkillUp:SetPoint("LEFT", 4, 0)
         row.Right = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
         row.Right:SetPoint("RIGHT", -8, 0)
         row.Right:SetJustifyH("RIGHT")
-        row.Label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+        row.Label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight_NoShadow")
         row.Label:SetPoint("RIGHT", row.Right, "LEFT", -6, 0)
         row.Label:SetJustifyH("LEFT")
         row.Label:SetWordWrap(false)
@@ -92,6 +131,11 @@ local function InitRow(row, data)
     row.Label:SetText(data.left or "")
     row.Right:SetText(data.right or "")
     row.Label:ClearPoint("LEFT")
+    -- every row keeps the skill-up arrow's column, so icons and names line up across sections
+    row.Icon:ClearAllPoints()
+    row.Icon:SetPoint("LEFT", 21, 0)
+    if data.skillUp then row.SkillUp:SetAtlas(data.skillUp) end
+    row.SkillUp:SetShown(data.skillUp ~= nil)
     if data.icon then
         row.Icon:SetTexture(data.icon)
         row.Icon:Show()
@@ -124,7 +168,7 @@ end
 -- Detail panel ---------------------------------------------------------------
 -- The right pane scrolls, so every source can be listed in full: drops, vendors and trainers are tables.
 
-local PAD, DETAIL_W, ROW = 28, 484, 20
+local PAD, DETAIL_W, ROW = 28, 484, 18
 local pool = { text = {}, rows = {}, slots = {} } -- widgets reused across selections
 local used = { text = 0, rows = 0, slots = 0 }
 local content, cursor
@@ -174,7 +218,7 @@ local function NextText(font)
 end
 
 local function AddText(text, font, gap)
-    local fs = NextText(font or "GameFontHighlightMedium")
+    local fs = NextText(font or "GameFontHighlight")
     fs:SetPoint("TOPLEFT", 0, cursor)
     fs:SetText(text)
     cursor = cursor - fs:GetStringHeight() - (gap or 4)
@@ -183,7 +227,7 @@ end
 
 local function AddHeading(text)
     cursor = cursor - 6
-    AddText(text, "GameFontNormalMed2", 6)
+    AddText(text, "GameFontNormal", 6)
 end
 
 local function RowTooltip(self)
@@ -192,6 +236,36 @@ local function RowTooltip(self)
     GameTooltip:AddLine(self.tip[1], 1, 1, 1)
     for i = 2, #self.tip do GameTooltip:AddLine(self.tip[i], 0.8, 0.8, 0.8, true) end
     GameTooltip:Show()
+end
+
+-- Only our last TomTom waypoint is replaced; the player's own stay
+local tomtomWaypoint
+
+local function SetTomTomPin(uiMap, x, y, name)
+    if not (TomTom and TomTom.AddWaypoint) then return false end
+    if tomtomWaypoint and TomTom.RemoveWaypoint then pcall(TomTom.RemoveWaypoint, TomTom, tomtomWaypoint) end
+    local ok, uid = pcall(TomTom.AddWaypoint, TomTom, uiMap, x, y,
+        { title = name, from = "Craftseeker", crazy = true, silent = true })
+    tomtomWaypoint = ok and uid or nil
+    return tomtomWaypoint ~= nil
+end
+
+-- A waypoint on the map for a source row's NPC or object, and in TomTom when it is installed
+local function SetPin(pin, name)
+    local uiMap, x, y = pin[1], pin[2], pin[3]
+    local info = C_Map.GetMapInfo(uiMap)
+    local tomtom = info and SetTomTomPin(uiMap, x, y, name)
+    if not (info and C_Map.CanSetUserWaypointOnMap(uiMap)) then
+        if not tomtom then
+            CS:Print((name or "That place") .. " can't be pinned on the map.")
+            return
+        end
+    else
+        C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(uiMap, x, y))
+        C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+    end
+    CS:Print(("%s set: %s, %s (%.1f, %.1f)"):format(tomtom and "map and TomTom pin" or "map pin",
+        name or "?", info.name, x * 100, y * 100))
 end
 
 -- One table row: columns are { text, width, justify }; tip is shown on hover
@@ -218,11 +292,11 @@ local function AddRow(columns, tip, font, onClick)
     for i, col in ipairs(columns) do
         local fs = row.cols[i]
         if not fs then
-            fs = Text(row, font or "GameFontHighlightMedium")
+            fs = Text(row, font or "GameFontHighlight")
             fs:SetWordWrap(false)
             row.cols[i] = fs
         end
-        fs:SetFontObject(font or "GameFontHighlightMedium")
+        fs:SetFontObject(font or "GameFontHighlight")
         fs:ClearAllPoints()
         fs:SetPoint("LEFT", x, 0)
         fs:SetWidth(col[2] - 6)
@@ -253,6 +327,14 @@ local function ColumnWidths(need)
         widths[1] = widths[1] + DETAIL_W - total
         return widths
     end
+    -- too wide: the name column gives way first (names cut short), then every column shares what is left
+    local overflow = total - DETAIL_W
+    local first = math.max(need[1] - overflow, math.min(need[1], 140))
+    if total - need[1] + first <= DETAIL_W then
+        for i = 1, n do widths[i] = need[i] end
+        widths[1] = DETAIL_W - (total - need[1])
+        return widths
+    end
     local order, room = {}, DETAIL_W
     for i = 1, n do order[i] = i end
     table.sort(order, function(a, b) return need[a] < need[b] end)
@@ -263,9 +345,14 @@ local function ColumnWidths(need)
     return widths
 end
 
--- header: column titles or nil; rows: { cells = { text, ... }, tip = { line, ... } }; justify: per column.
+-- Tables of one group share column widths, so vendor, trainer, creature and object columns line up down the pane:
+-- name, level, zone, chance or price, count
+local SOURCE_COLUMNS = { nil, nil, nil, "RIGHT", "RIGHT" }
+local groupNeed, groupDrawn, needGrew = {}, {}, false
+
+-- header: column titles or nil; rows: { cells = { text, ... }, tip = { line, ... }, pin }; justify: per column.
 -- Long tables show their first rows and a button for the rest; key names the table for that button.
-local function AddTable(header, rows, justify, key)
+local function AddTable(header, rows, justify, key, group)
     local shown = #rows
     if shown > TABLE_ROWS and not expanded[key] then shown = TABLE_ROWS end
     local need = {}
@@ -273,8 +360,20 @@ local function AddTable(header, rows, justify, key)
         for i = 1, #cells do need[i] = math.max(need[i] or 0, math.ceil(TextWidth(cells[i], font)) + 13) end
     end
     if header then Measure(header, "GameFontDisable") end
-    for i = 1, shown do Measure(rows[i].cells, "GameFontHighlightMedium") end
+    for i = 1, shown do Measure(rows[i].cells, "GameFontHighlight") end
     measure:SetText("") -- the alpha alone does not hide it
+    if group then
+        local g = groupNeed[group] or {}
+        groupNeed[group] = g
+        for i = 1, #need do
+            if need[i] > (g[i] or 0) then
+                g[i] = need[i]
+                if groupDrawn[group] then needGrew = true end
+            end
+            need[i] = g[i]
+        end
+        groupDrawn[group] = true
+    end
     local widths = ColumnWidths(need)
     local function Columns(cells)
         local cols = {}
@@ -282,12 +381,21 @@ local function AddTable(header, rows, justify, key)
         return cols
     end
     if header then AddRow(Columns(header), nil, "GameFontDisable") end
-    for i = 1, shown do AddRow(Columns(rows[i].cells), rows[i].tip) end
+    for i = 1, shown do
+        local r = rows[i]
+        local click
+        if r.pin then
+            r.tip[#r.tip + 1] = GOLD .. "Click to set a map pin|r"
+            click = function() SetPin(r.pin, r.tip[1]) end
+        end
+        AddRow(Columns(r.cells), r.tip, nil, click)
+    end
     if #rows > TABLE_ROWS then
         AddRow({ { GOLD .. (expanded[key] and "Show fewer" or ("Show all " .. #rows)) .. "|r", DETAIL_W } }, nil, nil, function()
             expanded[key] = not expanded[key]
             ShowDetail(true)
         end)
+        cursor = cursor - 10 -- keeps the button apart from the next heading
     end
 end
 
@@ -296,12 +404,13 @@ local function AddSlot(itemID, spellID, label)
     local slot = pool.slots[used.slots]
     if not slot then
         slot = ItemSlot(content)
-        slot.Text = Text(content, "GameFontHighlightMedium")
+        slot.Text = Text(content, "GameFontHighlight")
         slot.Text:SetPoint("LEFT", slot, "RIGHT", 10, 0)
         slot.Text:SetMaxLines(2)
         pool.slots[used.slots] = slot
     end
     FillSlot(slot, itemID, spellID)
+    slot.Text:SetMaxLines(2)
     slot.Text:SetText(label or "")
     slot.Text:Show()
     return slot
@@ -311,33 +420,102 @@ local function Money(copper)
     return copper and copper > 0 and CS.Money(copper) or ""
 end
 
+-- Blanks the game data left (zones, level, map pin) filled from what we and other Craftseeker users saw
+local function FillSeen(entry, npc)
+    local complete = #(entry.zones or {}) > 0 and entry.pin and (entry.level or not entry.npc)
+    if not npc or complete then return end
+    local seen = CS:SeenNpc(npc)
+    if #(entry.zones or {}) == 0 then entry.zones = seen.zones end
+    if entry.npc and not entry.level then entry.level = seen.level end
+    entry.pin = entry.pin or seen.pin
+end
+
+-- The world map's dungeon and raid icons in front of an instance's name
+local INSTANCE_ICON = { "|A:Dungeon:14:14|a ", "|A:Raid:14:14|a " }
+
 local function ZoneCell(zones)
     if not zones or #zones == 0 then return GREY .. "unknown|r" end
-    return zones[1] .. (#zones > 1 and (GREY .. " +" .. (#zones - 1) .. "|r") or "")
+    local icon = INSTANCE_ICON[CS.BUILTIN_INSTANCES and CS.BUILTIN_INSTANCES[zones[1]] or 0] or ""
+    return icon .. zones[1] .. (#zones > 1 and (GREY .. " +" .. (#zones - 1) .. "|r") or "")
 end
 
 -- Every creature that drops an item: QuestieDB's list joined with measured rates, best rate first, then
 -- this zone's creatures, then by name. Nothing is cut; the pane scrolls.
-local function AddDrops(itemID, qs)
+-- Chests, nodes and other objects an item comes from; QuestieDB lacks spawns for many, and where players looted
+-- them fills in
+local function AddObjects(qs, heading, key)
+    if not qs or #qs.objects == 0 then return false end
+    AddHeading(heading)
+    local rows = {}
+    for _, o in ipairs(qs.objects) do
+        local zones = #o.zones > 0 and o.zones or CS:SeenObjectZones(o.id)
+        rows[#rows + 1] = { cells = { o.name, "", ZoneCell(zones), "", "" },
+            tip = { o.name, #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded" },
+            pin = o.pin or CS:SeenObjectPin(o.id) }
+    end
+    AddTable(nil, rows, SOURCE_COLUMNS, key, "sources")
+    return true
+end
+
+-- Skinning, mining and herb gathering corpses, and nodes and chests, with how often each gave the item
+local function AddGathering(itemID, name)
+    local list = CS:GetGatherRates(itemID)
+    if not list then return false end
+    local rows = {}
+    for _, g in ipairs(list) do
+        local label, zones, pin
+        if g.kind == "k" then
+            label = CS:NpcName(g.id) or CS:SeenNpcName(g.id) or ("NPC " .. g.id)
+            local entry = { zones = CS:GetPlaces(g.id), npc = g.id }
+            if #entry.zones == 0 then entry.zones = CS:NpcZones(g.id) or {} end
+            FillSeen(entry, g.id)
+            zones, pin = entry.zones, entry.pin or CS:GetPin(g.id)
+        else
+            local qname, qzones, qpin = CS:ObjectInfo(g.id)
+            label = qname or g.n or ("Object " .. g.id)
+            zones = qzones and #qzones > 0 and qzones or CS:SeenObjectZones(g.id)
+            pin = qpin or CS:SeenObjectPin(g.id)
+        end
+        local how = g.p and (GREY .. " (" .. g.p .. ")|r") or ""
+        local tip = { label .. (g.p and (" - " .. g.p) or ""),
+            #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded",
+            ("%.2f%% over %d times gathered"):format(g.chance, g.k) }
+        if g.own > 0 then tip[#tip + 1] = ("%d of those are your own"):format(g.own) end
+        rows[#rows + 1] = { cells = { label .. how, "", ZoneCell(zones), ("%s%.2f%%|r"):format(GOLD, g.chance),
+            ("%s(%d)|r"):format(GREY, g.k) }, tip = tip, pin = pin }
+    end
+    AddHeading(("%s gathered from %d source%s"):format(name, #rows, #rows == 1 and "" or "s"))
+    AddTable({ "Source", "", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources")
+    return true
+end
+
+-- heading: a format for the creature count ("Recipe dropped by %d creature%s" when nil); key names the table
+local function AddDrops(itemID, qs, heading, key)
     local byNpc, list = {}, {}
     for _, e in ipairs(qs and qs.drops or {}) do
-        local entry = { npc = e.npc, name = e.name, level = e.level, rank = e.rank, zones = e.zones }
+        local entry = { npc = e.npc, name = e.name, level = e.level, rank = e.rank, zones = e.zones, pin = e.pin }
         byNpc[e.npc] = entry
         list[#list + 1] = entry
     end
     for _, r in ipairs(CS:GetDropRates(itemID) or {}) do
         local entry = byNpc[r.npc]
         if not entry then
-            entry = { npc = r.npc, name = r.name, zones = {} }
+            entry = { npc = r.npc, name = r.name, zones = {}, pin = CS:GetPin(r.npc) }
             byNpc[r.npc] = entry
             list[#list + 1] = entry
         end
         entry.chance, entry.kills, entry.own = r.chance, r.kills, r.own
     end
     if #list == 0 then return false end
-    -- QuestieDB has no spawns for many Forever creatures; the built-in places fill in
+    -- QuestieDB has no spawns for many Forever creatures; the built-in places, then its main zone, fill in
     for _, e in ipairs(list) do
         if #e.zones == 0 then e.zones = CS:GetPlaces(e.npc) end
+        if #e.zones == 0 then e.zones = CS:NpcZones(e.npc) or {} end
+        if not e.level then
+            local level, rank = CS:NpcLevel(e.npc)
+            e.level, e.rank = level, e.rank or rank
+        end
+        FillSeen(e, e.npc)
     end
     local here = GetRealZoneText()
     table.sort(list, function(a, b)
@@ -346,21 +524,23 @@ local function AddDrops(itemID, qs)
         if ah ~= bh then return ah end
         return a.name < b.name
     end)
-    AddHeading(("Recipe dropped by %d creature%s"):format(#list, #list == 1 and "" or "s"))
+    AddHeading((heading or "Recipe dropped by %d creature%s"):format(#list, #list == 1 and "" or "s"))
     local rows = {}
     for _, e in ipairs(list) do
         local name = e.rank and (e.name .. GOLD .. " " .. e.rank .. "|r") or e.name
-        local chance = e.chance and (("%s%.2f%%|r %s(%d)|r"):format(GOLD, e.chance, GREY, e.kills)) or (GREY .. "no data|r")
+        -- rate and corpse count in their own right-aligned columns, so digits and % signs line up
+        local chance = e.chance and ("%s%.2f%%|r"):format(GOLD, e.chance) or (GREY .. "no data|r")
+        local corpses = e.chance and ("%s(%d)|r"):format(GREY, e.kills) or ""
         local tip = { e.name }
         if e.rank then tip[#tip + 1] = e.rank end
         if e.level then tip[#tip + 1] = "Level " .. e.level end
         tip[#tip + 1] = #e.zones > 0 and ("Zones: " .. table.concat(e.zones, ", ")) or "Zone not recorded"
-        tip[#tip + 1] = e.chance and (("%.2f%% over %d corpses looted by WoW Forever players"):format(e.chance, e.kills))
+        tip[#tip + 1] = e.chance and (("%.2f%% over %d corpses looted by other players"):format(e.chance, e.kills))
             or "No measured drop rate yet"
         if e.own and e.own > 0 then tip[#tip + 1] = ("%d of those corpses are your own"):format(e.own) end
-        rows[#rows + 1] = { cells = { name, e.level and tostring(e.level) or "", ZoneCell(e.zones), chance }, tip = tip }
+        rows[#rows + 1] = { cells = { name, e.level and tostring(e.level) or "", ZoneCell(e.zones), chance, corpses }, tip = tip, pin = e.pin }
     end
-    AddTable({ "Creature", "Level", "Zone", "Chance" }, rows, { nil, nil, nil, "RIGHT" }, "drops")
+    AddTable({ "Creature", "Level", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, key or "drops", "sources")
     return true
 end
 
@@ -369,7 +549,7 @@ local function AddVendors(itemID, qs, heading)
     local byNpc, list = {}, {}
     for _, v in ipairs(CS:GetVendors(itemID) or {}) do
         local price = v.copper and v.copper > 0 and (Money(v.copper) .. (v.stack and v.stack > 1 and (GREY .. " /" .. v.stack .. "|r") or "")) or ""
-        local entry = { name = v.name, zones = v.zone and { v.zone } or {}, price = price }
+        local entry = { name = v.name, zones = v.zone and { v.zone } or {}, price = price, pin = v.pin }
         byNpc[v.npc] = entry
         list[#list + 1] = entry
     end
@@ -377,19 +557,40 @@ local function AddVendors(itemID, qs, heading)
         local entry = byNpc[e.npc]
         if entry then
             if #entry.zones == 0 then entry.zones = e.zones end
+            entry.pin = entry.pin or e.pin
         else
-            list[#list + 1] = { name = e.name, zones = e.zones, price = "" }
+            entry = { name = e.name, zones = e.zones, price = "", pin = e.pin }
+            byNpc[e.npc] = entry
+            list[#list + 1] = entry
+        end
+    end
+    -- prices seen at the vendor fill blanks; a vendor only we visited joins the list (other users' may be the other faction)
+    local seen, own = CS:SeenPrices(itemID)
+    for npc, p in pairs(seen) do
+        local entry = byNpc[npc]
+        if not entry and own[npc] then
+            entry = { name = p[3] or CS:NpcName(npc) or ("NPC " .. npc), zones = CS:GetPlaces(npc), price = "",
+                pin = CS:GetPin(npc) }
+            byNpc[npc] = entry
+            list[#list + 1] = entry
+        end
+        if entry and entry.price == "" then
+            entry.price = Money(p[1]) .. (p[2] > 1 and (GREY .. " /" .. p[2] .. "|r") or "")
         end
     end
     if #list == 0 then return false end
+    for npc, entry in pairs(byNpc) do
+        if #entry.zones == 0 then entry.zones = CS:NpcZones(npc) or {} end
+        FillSeen(entry, npc)
+    end
     table.sort(list, function(a, b) return a.name < b.name end)
     AddHeading(heading or ("Recipe sold by %d vendor%s"):format(#list, #list == 1 and "" or "s"))
     local rows = {}
     for _, v in ipairs(list) do
-        rows[#rows + 1] = { cells = { v.name, ZoneCell(v.zones), v.price },
-            tip = { v.name, #v.zones > 0 and ("Zones: " .. table.concat(v.zones, ", ")) or "Zone not recorded" } }
+        rows[#rows + 1] = { cells = { v.name, "", ZoneCell(v.zones), v.price, "" },
+            tip = { v.name, #v.zones > 0 and ("Zones: " .. table.concat(v.zones, ", ")) or "Zone not recorded" }, pin = v.pin }
     end
-    AddTable(nil, rows, { nil, nil, "RIGHT" }, heading and "buy" or "vendors")
+    AddTable(nil, rows, SOURCE_COLUMNS, heading and "buy" or "vendors", "sources")
     return true
 end
 
@@ -410,7 +611,7 @@ local function AddQuests(recipeID, qs)
         local name = q.name .. (q.level and (GREY .. " (" .. q.level .. ")|r") or "")
         rows[#rows + 1] = { cells = { name, q.giver or (GREY .. "unknown|r"), q.zone or (GREY .. "unknown|r") },
             tip = { q.name, q.giver and ("Given by " .. q.giver) or "Giver not recorded", q.zone and ("In " .. q.zone) or nil,
-                    q.level and ("Level " .. q.level) or nil } }
+                    q.level and ("Level " .. q.level) or nil }, pin = q.pin }
     end
     AddTable({ "Quest", "Given by", "Zone" }, rows, nil, "quests")
     return true
@@ -423,9 +624,13 @@ local function AddTrainers(recipeID)
     AddHeading(("Taught by %d trainer%s"):format(#list, #list == 1 and "" or "s"))
     local rows = {}
     for _, t in ipairs(list) do
-        rows[#rows + 1] = { cells = { t.name, t.zone or (GREY .. "unknown|r"), Money(t.copper) }, tip = { t.name, t.zone or "Zone not recorded" } }
+        local seen = { zones = t.zone and { t.zone } or {}, pin = t.pin }
+        FillSeen(seen, t.npc)
+        t.zone, t.pin = seen.zones[1], seen.pin
+        rows[#rows + 1] = { cells = { t.name, "", t.zone or (GREY .. "unknown|r"), Money(t.copper), "" },
+            tip = { t.name, t.zone or "Zone not recorded" }, pin = t.pin }
     end
-    AddTable(nil, rows, { nil, nil, "RIGHT" }, "trainers")
+    AddTable(nil, rows, SOURCE_COLUMNS, "trainers", "sources")
     return true
 end
 
@@ -447,7 +652,52 @@ local function AreaList(list, perEntry, withLevel)
     return table.concat(out, ", ")
 end
 
+-- One character's standing with a recipe: knows it, can learn it, or how much skill is missing
+local function SkillStatus(recipeID, rec, char)
+    local known = rawget(CS.data.known, char)
+    if known and known[recipeID] then return "knows it" end
+    local diff, rank = CS:Difficulty(recipeID, char)
+    if not rank then return nil end
+    local learn = CS:SkillRange(recipeID)
+    if diff == "learn" then
+        return ("%sneeds %d more skill|r (%s %d)"):format(RED, learn - rank, rec.p, rank)
+    end
+    return ("%scan learn it now|r (%s %d)"):format(CS.DIFFICULTY_COLOR[diff or ""] or "", rec.p, rank)
+end
+
+-- The skill colours, then where this character and each alt with the profession stand
+function AddSkill(recipeID, rec)
+    local learn, yellow, green, grey = CS:SkillRange(recipeID)
+    local c = CS.DIFFICULTY_COLOR
+    if yellow then
+        AddText(("Skill  %s%d|r  %s%d|r  %s%d|r  %s%d|r"):format(c.orange, learn, c.yellow, yellow, c.green, green, c.grey, grey))
+    end
+    local me = CS.CharKey()
+    local mine = SkillStatus(recipeID, rec, me)
+    AddText("You: " .. (mine or (GREY .. "you don't have " .. (rec.p or "this profession") .. "|r")))
+    local alts = {}
+    for char in pairs(CS.data.skills) do
+        local status = char ~= me and SkillStatus(recipeID, rec, char)
+        if status then alts[#alts + 1] = (char:match("^[^-]+") or char) .. ": " .. status end
+    end
+    table.sort(alts)
+    for _, line in ipairs(alts) do AddText(line) end
+end
+
+-- A class spell that uses reagents: who learns it and at what level
+local function AddClassSpell(recipeID, rec, level)
+    AddHeading("How to learn it:")
+    AddText(("%s spell, taught by %s trainers from level %d"):format(rec.p, rec.p, level))
+    local myClass = UnitClass("player")
+    if myClass == rec.p then
+        local mine = UnitLevel("player")
+        AddText(mine >= level and "You: can learn it" or ("You: %sat level %d|r (you are %d)"):format(RED, level, mine))
+    end
+end
+
 local function AddLearn(recipeID, rec)
+    local classLevel = CS.BUILTIN_CLASS and CS.BUILTIN_CLASS[recipeID]
+    if classLevel then return AddClassSpell(recipeID, rec, classLevel) end
     AddHeading("How to learn it:")
     local info = CS:GetLearnInfo(recipeID)
     if not info then
@@ -465,6 +715,7 @@ local function AddLearn(recipeID, rec)
         cursor = cursor - SLOT - 8
     end
     if info.skill > 0 then AddText(("Requires %s (%d)"):format(rec.p or "?", info.skill)) end
+    AddSkill(recipeID, rec)
     for i = 1, #info.rep, 2 do
         local fdata = C_Reputation.GetFactionDataByID(info.rep[i])
         local standing = _G["FACTION_STANDING_LABEL" .. info.rep[i + 1]] or info.rep[i + 1]
@@ -472,14 +723,18 @@ local function AddLearn(recipeID, rec)
     end
     if info.favor > 0 then AddText(("Costs %d Merchant's Favor"):format(info.favor)) end
     if info.side > 0 then AddText(FACTION_NAME[info.side] .. " only") end
-    if how:find("a") then AddText("Learned automatically with the profession") end
+    -- poisons are the rogue's class skill: one comes with the skill, the rest from rogue trainers
+    local poisons = rec.p == "Poisons"
+    if how:find("a") then
+        AddText(poisons and "Learned with the Poisons skill" or "Learned automatically with the profession")
+    end
 
     local qs = info.teach > 0 and CS:GetQuestieSources(info.teach) or nil
     local shown = false
     if AddTrainers(recipeID) then
         shown = true
     elseif how:find("t") then
-        AddText("Trainer" .. (info.cost > 0 and ("  " .. Money(info.cost)) or ""))
+        AddText((poisons and "Taught by Rogue trainers" or "Trainer") .. (info.cost > 0 and ("  " .. Money(info.cost)) or ""))
         shown = true
     end
     if info.teach > 0 and AddVendors(info.teach, qs) then
@@ -506,13 +761,7 @@ local function AddLearn(recipeID, rec)
         AddText("Drops from creatures (none recorded yet)")
         shown = true
     end
-    if qs and #qs.objects > 0 then
-        AddHeading("Found in")
-        local rows = {}
-        for _, o in ipairs(qs.objects) do
-            rows[#rows + 1] = { cells = { o.name, ZoneCell(o.zones) }, tip = { o.name, "Zones: " .. table.concat(o.zones, ", ") } }
-        end
-        AddTable(nil, rows, nil, "objects")
+    if AddObjects(qs, "Found in", "objects") then
         shown = true
     elseif how:find("w") then
         AddText("Found in a world object")
@@ -544,7 +793,7 @@ local function BuildDetail(panel)
     bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 6, 0)
     content = CreateFrame("Frame", nil, scroll)
     content:SetSize(DETAIL_W, 1)
-    measure = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    measure = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     measure:SetPoint("TOPLEFT")
     measure:SetAlpha(0)
     scroll:SetScrollChild(content)
@@ -553,13 +802,43 @@ local function BuildDetail(panel)
 
     detail.Output = ItemSlot(content)
     detail.Output:SetPoint("TOPLEFT", 0, -6)
-    detail.Name = Text(content, "GameFontHighlightLarge2")
+    detail.Name = Text(content, "GameFontHighlightMed2")
     detail.Name:SetPoint("TOPLEFT", detail.Output, "TOPRIGHT", 12, -2)
     detail.Name:SetWidth(DETAIL_W - SLOT - 12)
     detail.Name:SetWordWrap(false)
-    detail.Sub = Text(content, "GameFontHighlightMedium")
+    detail.Sub = Text(content, "GameFontHighlight")
     detail.Sub:SetPoint("TOPLEFT", detail.Name, "BOTTOMLEFT", 0, -5)
     detail.Sub:SetWidth(DETAIL_W - SLOT - 12)
+    detail.Name:SetWidth(DETAIL_W - SLOT - 12 - 120)
+
+    -- the profession window's favourite star and "Track" checkbox
+    local star = CreateFrame("Button", nil, content)
+    star:SetSize(20, 18)
+    star:SetPoint("TOPRIGHT", 0, -6)
+    star.Icon = star:CreateTexture(nil, "ARTWORK")
+    star.Icon:SetAllPoints()
+    star:SetHighlightAtlas("auctionhouse-icon-favorite-off", "ADD")
+    star:SetScript("OnClick", function()
+        CS:SetFavorite(selectedRecipe, not CS:IsFavorite(selectedRecipe))
+        Render(true)
+    end)
+    star:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip_AddHighlightLine(GameTooltip, CS:IsFavorite(selectedRecipe) and "Remove from favorites" or "Add to favorites")
+        GameTooltip:Show()
+    end)
+    star:SetScript("OnLeave", GameTooltip_Hide)
+    detail.Favorite = star
+
+    local track = CreateFrame("CheckButton", nil, content, "CheckboxWithLabelTemplate")
+    track:SetSize(26, 26)
+    track.Text:SetText(LIGHTGRAY_FONT_COLOR:WrapTextInColorCode("Track"))
+    -- one line with the star: the box, its label, then the star at the right edge
+    track:SetPoint("RIGHT", star, "LEFT", -(track.Text:GetStringWidth() + 14), 0)
+    track:SetScript("OnClick", function(self)
+        CS:SetTracked(selectedRecipe, self:GetChecked())
+    end)
+    detail.Track = track
 end
 
 local function ResetDetail()
@@ -573,10 +852,28 @@ local function ResetDetail()
     detail.Output:Hide()
     detail.Name:SetText("")
     detail.Sub:SetText("")
+    detail.Favorite:Hide()
+    detail.Track:Hide()
 end
 
--- keep: a show-more button redraws the same recipe where the reader is
+-- keep: a redraw of the same recipe (show-more, new bag counts, a list refresh) stays where the reader is
+local shownRecipe
 function ShowDetail(keep)
+    if not keep or selectedRecipe ~= shownRecipe then wipe(groupNeed) end
+    wipe(groupDrawn)
+    needGrew = false
+    DrawDetail(keep)
+    -- a later table of a group came out wider than an earlier one: draw once more with the group's widths
+    if needGrew then
+        wipe(groupDrawn)
+        needGrew = false
+        DrawDetail(true)
+    end
+end
+
+function DrawDetail(keep)
+    keep = keep and selectedRecipe == shownRecipe
+    shownRecipe = selectedRecipe
     if not keep then wipe(expanded) end
     ResetDetail()
     local rec = selectedRecipe and CS.recipes[selectedRecipe]
@@ -586,24 +883,34 @@ function ShowDetail(keep)
     if not keep then detail.scroll:SetVerticalScroll(0) end
     cursor = -8
     if not rec then
-        AddText(
-            "Alt+Click any item, or search on the left.\n" ..
-            "Click an item in this window for the recipes that use it, right-click it for the recipes that make it.\n\n" ..
-            "|cff40ff40Green|r  you know the recipe\n" ..
-            "|cffffd100Yellow|r  one of your alts knows it\n" ..
-            "|cff9d9d9dGrey|r  none of your characters know it yet\n\n" ..
-            "Recipes only the opposite faction can learn are hidden.\n" ..
-            "Opening a profession window marks what each character knows.")
+        AddHeading("How to use")
+        AddText("Alt+Click an item in your bags, or type in the search box.")
+        AddText("Click an item to see what it's used in.")
+        AddText("Right-click an item to see how it's made.")
+        AddText("Right-click a recipe to favorite or track it.")
+        AddText("Click a vendor, trainer or creature to pin it on your map.")
+        AddHeading("Legend")
+        AddText("|A:Professions-Icon-Skill-High:15:13|a  Guaranteed skill-up")
+        AddText("|A:Professions-Icon-Skill-Medium:15:13|a  Likely skill-up")
+        AddText("|A:Professions-Icon-Skill-Low:15:13|a  Small chance of a skill-up")
+        AddText(RED .. "Red name|r  Your skill is too low")
+        AddText("|A:common-icon-checkmark:14:14|a  You know this recipe")
+        AddText("|cff66bbffBlue name|r  One of your alts knows it (hover to see who)")
         content:SetHeight(-cursor)
         return
     end
 
     FillSlot(detail.Output, rec.o, rec.o == nil and selectedRecipe or nil)
+    detail.Favorite.Icon:SetAtlas(CS:IsFavorite(selectedRecipe) and "auctionhouse-icon-favorite" or "auctionhouse-icon-favorite-off")
+    detail.Favorite:Show()
+    detail.Track:SetShown(CS:CanTrack(selectedRecipe))
+    detail.Track:SetChecked(CS:IsTracked(selectedRecipe))
     local color = QualityColor(rec.o)
     detail.Name:SetText((rec.n or "?") .. (rec.q and rec.q > 1 and (" x" .. rec.q) or ""))
     if color then detail.Name:SetTextColor(color.r, color.g, color.b) else detail.Name:SetTextColor(1, 1, 1) end
     local who, alt = CS:WhoKnows(selectedRecipe)
-    detail.Sub:SetText((rec.p or "?") .. "   " .. (who == "me" and "|cff40ff40You know this|r"
+    detail.Sub:SetText((rec.p or "?") .. "   " .. (CS.BUILTIN_CLASS and CS.BUILTIN_CLASS[selectedRecipe] and "class spell"
+        or who == "me" and "|cff40ff40You know this|r"
         or who == "alt" and (GOLD .. "Known by " .. alt .. "|r") or (GREY .. "None of your characters know this|r")))
     cursor = -6 - SLOT - 14
 
@@ -611,7 +918,16 @@ function ShowDetail(keep)
     for i, r in ipairs(rec.r) do
         local id, qty = r[1], r[2]
         local name = CS:ItemName(id) or ("item " .. id)
-        local slot = AddSlot(id, nil, qty .. " " .. (id == currentItem and (GOLD .. name .. "|r") or name))
+        local have, alts = CS:ItemCounts(id)
+        local label = (have < qty and RED or "") .. have .. "/" .. qty .. (have < qty and "|r" or "") .. " "
+            .. (id == currentItem and (GOLD .. name .. "|r") or name)
+        if #alts > 0 then
+            local parts = {}
+            for k = 1, math.min(3, #alts) do parts[k] = alts[k][1] .. " " .. alts[k][2] end
+            label = label .. "\n" .. GREY .. "Alts: " .. table.concat(parts, ", ") .. (#alts > 3 and ", ..." or "") .. "|r"
+        end
+        local slot = AddSlot(id, nil, label)
+        slot.Text:SetMaxLines(3)
         local col = (i - 1) % 2
         slot:SetPoint("TOPLEFT", col * REAGENT_COL, cursor)
         slot.Text:SetWidth(REAGENT_COL - SLOT - 20)
@@ -620,10 +936,14 @@ function ShowDetail(keep)
 
     AddLearn(selectedRecipe, rec)
 
-    -- the looked-up reagent: its vendors, then what this account has seen
+    -- the looked-up reagent: vendors with prices, creatures with drop rates, objects, then what this account has seen
     if currentItem and not madeView then
         local name = CS:ItemName(currentItem) or "it"
-        AddVendors(currentItem, CS:GetQuestieSources(currentItem), "Where to buy " .. name)
+        local qs = CS:GetQuestieSources(currentItem)
+        AddVendors(currentItem, qs, "Where to buy " .. name)
+        AddDrops(currentItem, qs, name:gsub("%%", "%%%%") .. " drops from %d creature%s", "reagentDrops")
+        AddGathering(currentItem, name)
+        AddObjects(qs, name .. " is gathered or looted from", "reagentObjects")
         local seen = {}
         for _, l in ipairs(CS:SourceLines(currentItem, 50)) do
             seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
@@ -674,11 +994,30 @@ local function Build()
     listBorder:SetAllPoints()
     NineSliceUtil.ApplyLayoutByName(listBorder, "InsetFrameTemplate")
 
+    -- the profession window's Filter menu; its red reset button shows while any filter is on
+    local filterButton = CreateFrame("DropdownButton", nil, list, "WowStyle1FilterDropdownTemplate")
+    filterButton:SetPoint("TOPRIGHT", -8, -9)
+    filterButton:SetupMenu(function(_, root)
+        for _, entry in ipairs(FILTERS) do
+            local key = entry[1]
+            root:CreateCheckbox(entry[2], function() return CS.data.settings.filters[key] == true end, function()
+                CS.data.settings.filters[key] = not CS.data.settings.filters[key] or nil
+                Render(true)
+            end)
+        end
+    end)
+    filterButton:SetDefaultCallback(function()
+        wipe(CS.data.settings.filters)
+        Render(true)
+    end)
+    filterButton:SetIsDefaultCallback(function() return not CS:AnyFilter() end)
+    Browser.filterButton = filterButton
+
     searchBox = CreateFrame("EditBox", nil, list, "SearchBoxTemplate")
     searchBox:SetHeight(20)
     searchBox:SetPoint("TOPLEFT", 13, -8)
-    searchBox:SetPoint("RIGHT", -10, 0)
-    searchBox.Instructions:SetText("Search reagents")
+    searchBox:SetPoint("RIGHT", filterButton, "LEFT", -4, 0)
+    searchBox.Instructions:SetText("Reagent or recipe")
     searchBox:SetScript("OnEnterPressed", function(self)
         self:ClearFocus()
         Browser:Show(self:GetText())
@@ -686,7 +1025,11 @@ local function Build()
     -- live search; a short delay keeps each keystroke from rebuilding the list
     local pending
     searchBox:HookScript("OnTextChanged", function(self, userInput)
-        if not userInput then return end
+        -- the clear button empties the box without user input: back to the start page and your reagents
+        if not userInput then
+            if self:GetText() == "" and currentQuery ~= "" then Browser:Show("", true) end
+            return
+        end
         if pending then pending:Cancel() end
         pending = C_Timer.NewTimer(0.3, function()
             pending = nil
@@ -737,15 +1080,51 @@ end
 -- Views return the list elements, or nil plus a message for the empty list
 local function WelcomeView()
     SetHeading(nil, "Look up a reagent", ("%d recipes across every profession"):format(CS:CountRecipes()))
-    return nil, ""
+    -- the reagents this character carries (bags, and the bank once opened), a click away
+    local mine = CS.data.items[CS.CharKey()]
+    if not mine then return nil, "" end
+    local have, rows = {}, {}
+    for _, place in ipairs({ mine.bags, mine.bank }) do
+        for itemID in pairs(place or {}) do have[itemID] = true end
+    end
+    -- with filters on, a reagent counts only the recipes that pass them, and drops out without any
+    local filtered = CS:AnyFilter()
+    for itemID in pairs(have) do
+        local uses = CS:GetUses(itemID)
+        if uses and filtered then
+            local kept = {}
+            for _, id in ipairs(uses) do
+                if CS:PassesFilters(id) then kept[#kept + 1] = id end
+            end
+            uses = #kept > 0 and kept or nil
+        end
+        if uses then
+            rows[#rows + 1] = {
+                itemID = itemID, lookup = itemID,
+                icon = C_Item.GetItemIconByID(itemID),
+                left = CS:ItemName(itemID) or ("item " .. itemID),
+                right = #uses .. " recipe" .. (#uses == 1 and "" or "s"),
+            }
+        end
+    end
+    if #rows == 0 then return nil, filtered and FILTERED or "" end
+    table.sort(rows, function(a, b) return a.left < b.left end)
+    table.insert(rows, 1, { header = true, key = "Your reagents", text = "Your reagents  " .. GREY .. #rows .. "|r" })
+    if collapsed["Your reagents"] then return { rows[1] } end
+    return rows
 end
 
-local function PickerView(hits, query)
-    SetHeading(nil, "Search", #hits .. " reagent" .. (#hits == 1 and "" or "s") .. " match \"" .. query .. "\"")
-    if #hits == 0 then return nil, "No reagent matches that." end
+local ProfessionSections
+local function PickerView(hits, uses, recipes, query)
+    SetHeading(nil, "Search", ("%d reagent%s and %d recipe%s match \"%s\""):format(#hits, #hits == 1 and "" or "s",
+        #recipes, #recipes == 1 and "" or "s", query))
+    if #hits + #recipes == 0 then return nil, "Nothing matches that." end
     local list = {}
-    for _, itemID in ipairs(hits) do
-        local n = #CS:GetUses(itemID)
+    if #hits > 0 and #recipes > 0 then
+        list[1] = { header = true, key = "Reagents", text = "Reagents  " .. GREY .. #hits .. "|r" }
+    end
+    for _, itemID in ipairs(collapsed.Reagents and #recipes > 0 and {} or hits) do
+        local n = uses[itemID]
         list[#list + 1] = {
             itemID = itemID, lookup = itemID,
             icon = C_Item.GetItemIconByID(itemID),
@@ -753,33 +1132,61 @@ local function PickerView(hits, query)
             right = n .. " recipe" .. (n == 1 and "" or "s"),
         }
     end
+    for _, row in ipairs(ProfessionSections(recipes)) do list[#list + 1] = row end
+    if #list == 0 then return nil, FILTERED end
     return list
 end
 
 -- Recipes in one section per profession, in the order given; reagentID tags optional reagents
-local function ProfessionSections(ids, reagentID)
+function ProfessionSections(ids, reagentID)
     local list, first = {}, nil
     local byProf, profs = {}, {}
+    if ids and CS:AnyFilter() then
+        local kept = {}
+        for _, recipeID in ipairs(ids) do
+            if CS:PassesFilters(recipeID) then kept[#kept + 1] = recipeID end
+        end
+        ids = kept
+    end
     for _, recipeID in ipairs(ids or {}) do
-        local p = CS.recipes[recipeID].p or "?"
+        local p = CS:IsFavorite(recipeID) and FAVORITES or CS.recipes[recipeID].p or "?"
         if not byProf[p] then
             byProf[p] = {}
             profs[#profs + 1] = p
         end
         table.insert(byProf[p], recipeID)
     end
-    table.sort(profs)
+    -- the character's own professions first, then the rest, each alphabetical
+    local me = CS.CharKey()
+    table.sort(profs, function(a, b)
+        if (a == FAVORITES) ~= (b == FAVORITES) then return a == FAVORITES end
+        local ma, mb = CS:SkillOf(me, a) ~= nil, CS:SkillOf(me, b) ~= nil
+        if ma ~= mb then return ma end
+        return a < b
+    end)
     for _, p in ipairs(profs) do
         local section = byProf[p]
+        -- craftable now first, then by skill-up chance like the profession window, red (skill too low) last, then name
+        local makeable, order = {}, {}
+        for _, id in ipairs(section) do
+            makeable[id] = CS:HasMaterials(id)
+            order[id] = SKILL_ORDER[CS:Difficulty(id) or ""] or SKILL_ORDER.none
+        end
+        table.sort(section, function(a, b)
+            if makeable[a] ~= makeable[b] then return makeable[a] end
+            if order[a] ~= order[b] then return order[a] < order[b] end
+            return (CS.recipes[a].n or "") < (CS.recipes[b].n or "")
+        end)
         list[#list + 1] = { header = true, key = p, text = p .. "  " .. GREY .. #section .. "|r" }
         for _, recipeID in ipairs(section) do
             first = first or recipeID
             if not collapsed[p] then
                 local rec = CS.recipes[recipeID]
-                local _, text = CS:RecipeLine(recipeID, reagentID)
+                local _, text, right, skillUp = CS:RecipeLine(recipeID, reagentID)
                 list[#list + 1] = {
                     recipeID = recipeID, itemID = rec.o, spellID = rec.o == nil and recipeID or nil,
-                    left = text,
+                    icon = (rec.o and C_Item.GetItemIconByID(rec.o) or C_Spell.GetSpellTexture(recipeID)) or 134400,
+                    left = text, right = right, skillUp = skillUp,
                 }
             end
         end
@@ -795,12 +1202,18 @@ local function ItemView(itemID)
     if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
     currentItem = itemID
     local uses = CS:GetUses(itemID)
-    local list, nProfs = ProfessionSections(uses, itemID)
-    local n = uses and #uses or 0
+    local list = ProfessionSections(uses, itemID)
+    local n, nProfs, seen = uses and #uses or 0, 0, {}
+    -- the heading counts every recipe, filtered out or not
+    for _, id in ipairs(uses or {}) do
+        local p = CS.recipes[id].p or "?"
+        if not seen[p] then seen[p], nProfs = true, nProfs + 1 end
+    end
     SetHeading(C_Item.GetItemIconByID(itemID), CS:ItemName(itemID) or ("item " .. itemID),
         n > 0 and ("Used in %d recipe%s across %d profession%s"):format(n, n == 1 and "" or "s", nProfs, nProfs == 1 and "" or "s")
             or (CS.usedIn[itemID] and "Only used in recipes the opposite faction learns" or "Not used in any recipe"), itemID)
     if #list == 0 then
+        if n > 0 then return nil, FILTERED end
         return nil, CS.usedIn[itemID] and "Only used in recipes the opposite faction learns." or "No recipe uses this item."
     end
     return list
@@ -817,30 +1230,35 @@ local function MadeView(itemID)
         n > 0 and ("Made by %d recipe%s"):format(n, n == 1 and "" or "s")
             or (CS.madeBy[itemID] and "Only made by the opposite faction" or "No recipe makes this"), itemID)
     if #list == 0 then
+        if n > 0 then return nil, FILTERED end
         return nil, CS.madeBy[itemID] and "Only the opposite faction can make this." or "No recipe makes this item."
     end
     return list
 end
 
 local function BuildView(query)
-    currentItem, madeView = nil, false
+    currentItem, madeView, picking = nil, false, false
     if query == "" then return WelcomeView() end
     local made = tonumber(query:match("^made:(%d+)$"))
     if made then return MadeView(made) end
     local itemID = CS.ItemIDFromText(query)
+    -- a crafted item that no recipe uses opens on the recipes that make it
+    if itemID and not CS:GetUses(itemID) and CS:GetMakers(itemID) then return MadeView(itemID) end
     if itemID then return ItemView(itemID) end
-    local hits = CS:SearchReagentsByName(query)
-    if #hits == 1 then return ItemView(hits[1]) end
-    return PickerView(hits, query)
+    local hits, uses = CS:SearchReagentsByName(query)
+    local recipes = CS:SearchRecipesByName(query)
+    if #hits == 1 and #recipes == 0 then return ItemView(hits[1]) end
+    picking = #recipes > 0
+    return PickerView(hits, uses, recipes, query)
 end
 
 function Render(keepScroll)
     local list, message = BuildView(currentQuery)
-    if not currentItem then selectedRecipe = nil end
+    if not currentItem and not picking then selectedRecipe = nil end
     scrollBox:SetDataProvider(CreateDataProvider(list or {}),
         keepScroll and ScrollBoxConstants.RetainScrollPosition or ScrollBoxConstants.DiscardScrollPosition)
     listEmpty:SetText(message or "")
-    ShowDetail()
+    ShowDetail(keepScroll)
 end
 
 -- fromTyping: the search box already holds the text, so don't overwrite it mid-edit
@@ -860,12 +1278,66 @@ function Browser:Toggle()
     if f and f:IsShown() then f:Hide() else self:Show("") end
 end
 
--- Names and icons of uncached items arrive in bursts
-function Browser:ItemInfoReceived()
-    if f and f:IsShown() and currentQuery ~= "" then Render(true) end
+-- Names and icons of uncached items arrive in bursts; only those the window showed without a name redraw it
+function Browser:ItemInfoReceived(arrived)
+    local missing, redraw = CS.missingNames, false
+    for itemID in pairs(arrived or {}) do
+        if missing[itemID] then
+            missing[itemID] = nil
+            redraw = true
+        end
+    end
+    if redraw and f and f:IsShown() and currentQuery ~= "" then Render(true) end
+end
+
+-- New bag counts, skill ranks or drop counts: redraw the recipe where the reader is
+function Browser:ItemsChanged()
+    if not (f and f:IsShown()) then return end
+    -- the start page lists the bags, so it redraws whole
+    if currentQuery == "" then
+        Render(true)
+    elseif selectedRecipe then
+        ShowDetail(true)
+    end
+end
+
+-- A profession was hidden or shown in the settings
+function Browser:FilterChanged()
+    if f and f:IsShown() then Render(true) end
+end
+
+-- One line under a crafting reagent's own tooltip; everything else stays in the window. Tooltips redraw while
+-- hovered, so each count is kept for a few seconds.
+local tipCounts = {}
+local function ReagentLine(tooltip, data)
+    if not CS.data.settings.tooltip or tooltip ~= GameTooltip or not data or CS.IsSecret(data.id) then return end
+    local id = data.id
+    if not id or not CS.usedIn[id] then return end
+    -- only for items in the bags and the bank, where Alt+Click opens them
+    local ok, inBags = pcall(function()
+        local owner = tooltip:GetOwner()
+        return owner and (owner.GetBankTabID ~= nil or (owner.GetBagID and owner:GetBagID() ~= nil)) or false
+    end)
+    if not (ok and inBags) then return end
+    local hit = tipCounts[id]
+    if not hit or GetTime() - hit.at > 10 then
+        local uses = CS:GetUses(id)
+        hit = { n = uses and #uses or 0, at = GetTime() }
+        tipCounts[id] = hit
+    end
+    if hit.n == 0 then return end
+    tooltip:AddLine(("%sUsed in %d recipe%s|r %s(Alt+Click)|r"):format("|cff66bbff", hit.n, hit.n == 1 and "" or "s",
+        GREY), 1, 1, 1)
 end
 
 function Browser:OnEnable()
+    if TooltipDataProcessor and Enum.TooltipDataType then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, ReagentLine)
+    end
+    self:RegisterMessage("CRAFTSEEKER_ITEMS", "ItemsChanged")
+    self:RegisterMessage("CRAFTSEEKER_FILTER", "FilterChanged")
+    -- loot and shared counts come in bursts; one redraw every few seconds at most
+    self:RegisterBucketMessage("CRAFTSEEKER_COUNTS", 3, "ItemsChanged")
     self:RegisterBucketEvent("GET_ITEM_INFO_RECEIVED", 0.3, "ItemInfoReceived")
     -- Alt+Click any item (bags, bank, loot...) to look it up; Shift+Click drops it into a focused search box
     hooksecurefunc("HandleModifiedItemClick", function(link)

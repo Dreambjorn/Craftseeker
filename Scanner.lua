@@ -62,20 +62,18 @@ function Scanner:Scan()
 
     local data = CS.data
     local known = data.known[CS.CharKey()]
-    local added, rebuild, unlearned = 0, false, false
+    local rebuild, unlearned = false, false
     local listed = {}
     for _, recipeID in ipairs(ids) do
         listed[recipeID] = true
         local rec, info = ScanRecipe(recipeID)
         if rec then
             local old = CS.recipes[recipeID]
-            if not old then
-                added = added + 1
-            elseif IndexChanged(old, rec) then
-                rebuild = true
-            end
+            if old and IndexChanged(old, rec) then rebuild = true end
             CS:SetRecipe(recipeID, rec)
         end
+        -- a window lists other seasons' recipes too; one somebody has learned is proof it exists here
+        if info and info.learned then data.proven[recipeID] = true end
         if ownWindow and info then
             known[recipeID] = info.learned and true or nil
             if not info.learned then unlearned = true end
@@ -90,9 +88,56 @@ function Scanner:Scan()
     end
     -- IndexRecipe only adds, so drop entries for reagents a recipe no longer uses
     if rebuild then CS:RebuildIndex() end
-    if added > 0 then
-        CS:Print(("learned %d new recipes from %s (%d total)."):format(added, prof or "this profession", CS:CountRecipes()))
+    CS:KnownChanged()
+end
+
+-- This character's professions and ranks, kept for the skill colours and for alts
+local skillsSeen -- the ranks the spellbook was last read for
+function Scanner:ReadSkills(events)
+    local ranks, seen = {}, {}
+    for _, index in pairs({ GetProfessions() }) do
+        local name, _, rank = GetProfessionInfo(index)
+        if name and not CS.IsSecret(name, rank) then
+            ranks[name] = rank
+            seen[#seen + 1] = name .. rank
+        end
     end
+    CS.data.skills[CS.CharKey()] = ranks
+    -- the spellbook only changes with a new recipe, a new rank or a new level (class spells)
+    table.sort(seen)
+    seen = table.concat(seen, ",") .. "," .. (UnitLevel("player") or 0)
+    local learned = type(events) == "table" and (events.NEW_RECIPE_LEARNED or events.LEARNED_SPELL_IN_SKILL_LINE)
+    if learned or seen ~= skillsSeen then
+        skillsSeen = seen
+        self:ReadSpellbook()
+    end
+    self:SendMessage("CRAFTSEEKER_ITEMS")
+end
+
+-- Recipes are spells the character knows, so no profession window is needed to mark them. Only adds: a window scan
+-- stays the one place that clears a mark.
+function Scanner:ReadSpellbook()
+    if not (C_SpellBook and C_SpellBook.IsSpellKnown) then return end
+    local me = CS.CharKey()
+    local skills, known = CS.data.skills[me] or {}, CS.data.known[me]
+    local class = UnitClass("player")
+    local added = 0
+    local level = UnitLevel("player") or 0
+    for recipeID, rec in pairs(CS.recipes) do
+        local rank = skills[rec.p]
+        -- a recipe above the character's rank (or a class spell above its level) can't be known yet
+        local reachable = rank and rank >= CS:SkillRange(recipeID)
+            or rec.p == class and level >= (CS.BUILTIN_CLASS and CS.BUILTIN_CLASS[recipeID] or 0)
+        if reachable and not known[recipeID] then
+            local ok, has = pcall(C_SpellBook.IsSpellKnown, recipeID)
+            if ok and has == true then
+                known[recipeID] = true
+                CS.data.proven[recipeID] = true
+                added = added + 1
+            end
+        end
+    end
+    if added > 0 then CS:KnownChanged() end
 end
 
 function Scanner:Reset()
@@ -108,4 +153,7 @@ function Scanner:OnEnable()
     -- Half a second of quiet lets the window finish loading; LIST_UPDATE covers data that was late
     self:RegisterBucketEvent({ "TRADE_SKILL_SHOW", "TRADE_SKILL_DATA_SOURCE_CHANGED", "NEW_RECIPE_LEARNED",
         "TRADE_SKILL_LIST_UPDATE" }, 0.5, "Scan")
+    self:RegisterBucketEvent({ "SKILL_LINES_CHANGED", "TRADE_SKILL_SHOW", "NEW_RECIPE_LEARNED", "LEARNED_SPELL_IN_SKILL_LINE",
+        "PLAYER_LEVEL_UP" }, 1, "ReadSkills")
+    self:ReadSkills()
 end
