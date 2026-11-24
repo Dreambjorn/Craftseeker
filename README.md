@@ -74,8 +74,6 @@ Reagents in your bags and bank get one line in their tooltip, saying how many re
 
 **A:** Run `/cs status`. It says whether the hidden channel passed its self-test and what was heard and sent this session. "Show debug messages" in the settings prints more.
 
-<br>
-
 ---
 
 ## Credits
