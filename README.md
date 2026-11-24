@@ -1,49 +1,88 @@
-# Craftseeker (WoW: Forever)
+# Craftseeker
+Craftseeker is a reagent and recipe browser for WoW: Forever, laid out like the profession window.
 
-Alt+Click any crafting reagent to see every recipe it goes into, how to learn each one, and where you've found the reagent before. Item tooltips are left untouched.
+Alt+Click any crafting reagent in your bags to see every recipe it goes into, how to learn each one, and where to get the reagent — vendors, drops, gathering and chests, with drop rates measured by players.
 
-## Install
-1. Unzip so you have `World of Warcraft\_forever_\Interface\AddOns\Craftseeker\Craftseeker.toc`
-2. Restart the game (or `/reload` if it was already running when you copied it in).
+---
+What it shows:
 
-## How it learns
-- **Built-in recipes:** `Data.lua` holds every Forever profession recipe (about 2,200) with its reagents, and how it is learned: trainer and cost, recipe item, vendor zones, quests, reputation and Merchant's Favor. Every reagent works from the first login.
-- **QuestieDB (optional):** when Questie's database addon is installed, recipe items list the creatures that drop them (with level, rank and zone), the vendors that sell them by name and zone, and the quests that reward them. Reagents list their vendors too. Nothing is copied from it; it is read in game.
-- **Drop rates:** for about 120 recipe items, the chance per creature that WoW Forever players measured (Drop Tables and Polestar recordings), with the kills it is based on. Rare drops often have no measured rate yet.
-- **Trainers and vendors:** the trainers and vendors WoW Forever players saw (EG Link), by name, zone and price.
-- **Quests and places:** quests that teach a recipe, with who gives them and where, and the zone or instance of each creature (AllTheThings, Drop Tables).
-- **Your own loot:** every corpse you loot is counted, so drop rates keep improving as you play; your counts are added to the built-in ones.
-- **Sharing:** Craftseeker users in your guild, your group and your friends lists (Battle.net friends too) trade their loot counts, so everyone's drop rates grow together. Your counts are announced when you log in, when you join a group or someone joins yours, when a friend comes online, and after new loot. Each user's counts are capped, and `/cs share` turns it off.
-- **Faction:** recipes only the opposite faction can learn are hidden, and so are the opposite faction's vendors and quests. The factions can't trade, so a reagent only the opposite faction's recipes use says so.
-- **Profession windows:** opening one of your profession windows marks which recipes each character knows, adds any recipe the game data missed, and hides built-in recipes that window does not list.
-- **Linked professions:** a profession link from chat adds its recipes too.
-- **Sources:** once an item is a known reagent, the addon records the vendors that sell it (with price), the mobs that drop it, the nodes you gather it from, and the zones you fish it in.
+- Every recipe that uses a reagent, grouped by profession
+- The recipes that make an item (right-click it)
+- How to learn each recipe — trainers, vendors, drops and quests
+- Where to get a reagent — vendors with prices, creatures with drop rates, skinning, mining, herbs and chests
+- Skill-up arrows, like the profession window
+- Which of your characters know a recipe
+- How many of each reagent you carry, in your bags, bank and on your alts
+- Map pins for trainers, vendors and creatures (TomTom too, when installed)
 
-## Using it
-- **Alt+Click** an item in your bags to open the browser. It looks like the profession window: recipes grouped by profession on the left, the selected recipe's reagents and how to learn it on the right. The right side scrolls: creatures, vendors and trainers are listed in tables, best drop rate first, with a button to show the rest of a long one; hover a row for all its zones.
-- **Click** an item in the window for the recipes that use it; **right-click** it for the recipes that make it.
-  - Green: this character knows it. Yellow: an alt knows it. Grey: none of your characters know it yet.
-- `/cs` or the minimap button opens the browser. Type a name, or Shift+Click an item into the search box.
-- **Settings** are under Options > AddOns > Craftseeker (`/cs options`, or right-click the minimap button): the minimap button, source tracking and sharing. `/cs minimap` shows or hides the button.
-- `/cs help` lists the commands. `/cs stats` shows what's been learned so far, and from how many other users.
+---
 
-## Code layout
-Built on Ace3 (`Libs\`): AceAddon for the addon object and modules, AceDB for saved data, AceEvent and AceBucket for events, AceConsole for `/cs`; LibDataBroker and LibDBIcon for the minimap button.
+The start page lists the reagents in your bags and bank. Search for any reagent, recipe or crafted item, and narrow every list with the Filter button: your professions only, recipes with a skill-up, recipes you don't know yet, or recipes you have the materials for. Favorite a recipe to keep it at the top, or track it in the objective tracker.
 
-- `Core.lua` - addon object, saved-data defaults, slash commands
-- `Recipes.lua` - recipe index, lookups, faction filter
-- `Questie.lua` - creature, vendor, object and quest sources from QuestieDB's public API (contract 4)
-- `Data.lua` - generated recipe data; do not edit by hand
-- `Format.lua` - recipe and source text for the browser
-- `Scanner.lua` - module: learns from profession windows
-- `Sources.lua` - module: records vendors, loot, gathering and fishing, and counts looted corpses
-- `Share.lua` - module: trades loot counts with other users (guild, group, friends; Forever refuses custom channels)
-- `Browser.lua` - module: the window
-- `Options.lua` - module: the settings page under Options > AddOns, and the minimap button
+---
+
+Drop rates keep improving as you play. Every corpse you loot and every node you gather is counted, and Craftseeker shares those counts with other Craftseeker users online — both factions, your guild, group and friends. It also reads the counts Drop Tables and Forever Drops users share, and fills in levels, zones and vendor prices the game data leaves blank.
+
+Reagents in your bags and bank get one line in their tooltip, saying how many recipes use them; nothing else touches item tooltips.
+
+---
+
+## Commands:
+
+- ` /cs ` — Open Craftseeker
+- ` /cs <item link, ID or name> ` — Look up a reagent, recipe or crafted item
+- ` /cs options ` — Open the settings
+- ` /cs minimap ` — Show / hide the minimap button
+- ` /cs share ` — Turn sharing with other Craftseeker users on / off
+- ` /cs status ` — Check whether sharing reaches other players
+- ` /cs hello ` — Announce yourself to other Craftseeker users now
+- ` /cs stats ` — What's been learned so far
+- ` /cs reset ` — Wipe all learned data
+---
+
+## FAQ
+
+**Q: Do I need Questie?**
+
+**A:** No. With QuestieDB installed, recipe items and reagents also list the creatures that drop them, the vendors that sell them and the quests that reward them.
+
+<br>
+
+**Q: Why are some drop rates missing?**
+
+**A:** A rate shows once someone has looted that creature. Rare drops often have no measured rate yet; they fill in as you and other players loot.
+
+<br>
+
+**Q: Why don't I see the opposite faction's recipes?**
+
+**A:** The factions can't trade, so those recipes are hidden. Tick "Show opposite faction" in the settings to list them.
+
+<br>
+
+**Q: How do I know which recipes I already know?**
+
+**A:** Recipes you know get a check mark, read from your spellbook at login. A blue name means one of your alts knows it — hover it to see who.
+
+<br>
+
+**Q: Sharing doesn't seem to work.**
+
+**A:** Run `/cs status`. It says whether the hidden channel passed its self-test and what was heard and sent this session. "Show debug messages" in the settings prints more.
+
+<br>
+
+---
 
 ## Credits
-- Drop rates: Drop Tables contributors, https://github.com/valcheffnet/DropTables (CC BY-SA 4.0), and the Polestar authors' Recorder sessions, https://github.com/fitzforge/polestar (CC BY 4.0). The rate table is shared under CC BY-SA 4.0.
+
+- Drop rates and skinning: Drop Tables contributors, https://github.com/valcheffnet/DropTables (CC BY-SA 4.0), and the Polestar authors' Recorder sessions, https://github.com/fitzforge/polestar (CC BY 4.0). The rate, gathering and creature-place tables are shared under CC BY-SA 4.0.
 - Recipe sources: WhatsTraining, https://github.com/fusionpit/WhatsTraining (MIT).
 - Trainers, vendors and creature names: Data from Efficient Games (https://efficient.games), licensed under CC BY 4.0.
 - Creature places, quest names and givers: AllTheThings, https://github.com/ATTWoWAddon/AllTheThings (MIT).
 - Full notices: `LICENSE-DATA.md`.
+
+## License
+The code is MIT (`LICENSE`); data licences are in `LICENSE-DATA.md`.
+
+Made for WoW: Forever.
