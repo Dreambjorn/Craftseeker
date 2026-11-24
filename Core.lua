@@ -117,7 +117,7 @@ function CS:SlashCommand(input)
             .. "loot counts from " .. peers .. " other Craftseeker user" .. (peers == 1 and "" or "s")
             .. ", " .. dt .. " Drop Tables and " .. fd .. " Forever Drops users")
         for p, n in pairs(profs) do
-            print("  " .. p .. ": " .. n .. (data.verified[p] and "" or " (not checked against a window yet)"))
+            print("  " .. p .. ": " .. n)
         end
     elseif cmd == "reset" then
         wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared); wipe(data.prices); wipe(data.objects); wipe(data.objectPins); wipe(data.npcs); wipe(data.gather.k); wipe(data.gather.g)
