@@ -1,4 +1,4 @@
--- Craftseeker: creature, vendor, object and quest sources read from QuestieDB when it is installed
+-- Craftseeker: creature, vendor, object and quest sources: built in, and read from QuestieDB when it is installed
 local _, CS = ...
 
 local CONTRACT = 4 -- QuestieDB public API version this file was written against
@@ -7,6 +7,7 @@ local available
 
 -- QuestieDB is optional; without it the browser falls back to the built-in data
 function CS:HasQuestieDB()
+    -- asked again until found: QuestieDB may load after Craftseeker
     if not available then
         local lib = _G.LibQuestieDB
         available = lib and lib.RequireContract and lib.RequireContract(CONTRACT) and ItemDB and NpcDB
@@ -54,13 +55,18 @@ function CS:NpcName(npcID)
     return self:HasQuestieDB() and NpcDB.Get(npcID, "name") or (self.BUILTIN_NAMES and self.BUILTIN_NAMES[npcID]) or nil
 end
 
--- QuestieDB's name, zones and map pin for a node or chest, or nil
+-- A node's or chest's name, zones and map pin, from QuestieDB or the built-in data, or nil
 function CS:ObjectInfo(objectID)
-    if not objectID or not self:HasQuestieDB() then return nil end
-    local name = ObjectDB.Get(objectID, "name")
-    if not name then return nil end
-    local spawns = ObjectDB.Get(objectID, "spawns")
-    return name, Zones(spawns, ObjectDB.Get(objectID, "zoneID")), SpawnPin(spawns)
+    if not objectID then return nil end
+    local name = self:HasQuestieDB() and ObjectDB.Get(objectID, "name")
+    if name then
+        local spawns = ObjectDB.Get(objectID, "spawns")
+        return name, Zones(spawns, ObjectDB.Get(objectID, "zoneID")), SpawnPin(spawns)
+    end
+    local o = self.BUILTIN_OBJECTS and self.BUILTIN_OBJECTS[objectID]
+    if not o then return nil end
+    local map = o[2] > 0 and C_Map.GetMapInfo(o[2])
+    return o[1], { map and map.name or nil }, o[3] > 0 and { o[2], o[3] / 1000, o[4] / 1000 } or nil
 end
 
 -- QuestieDB's zones for a creature (dungeon bosses have a main zone but often no spawns), or nil
@@ -75,10 +81,13 @@ local function Level(id)
     return minL and minL > 0 and (maxL and maxL > minL and (minL .. "-" .. maxL) or tostring(minL)) or nil
 end
 
--- QuestieDB's level range ("16-17") and rank for a creature, for rows that came from drop counts alone
+-- A creature's level range ("16-17") and rank, from QuestieDB or the built-in data, for rows from drop counts alone
 function CS:NpcLevel(npcID)
-    if not npcID or not self:HasQuestieDB() then return nil end
-    return Level(npcID), RANK[NpcDB.Get(npcID, "rank")]
+    if not npcID then return nil end
+    if self:HasQuestieDB() and Level(npcID) then return Level(npcID), RANK[NpcDB.Get(npcID, "rank")] end
+    local l = self.BUILTIN_LEVELS and self.BUILTIN_LEVELS[npcID]
+    if not l then return nil end
+    return l[1] > 0 and (l[2] > l[1] and (l[1] .. "-" .. l[2]) or tostring(l[1])) or nil, RANK[l[3]]
 end
 
 local function NpcEntry(id)
@@ -145,15 +154,94 @@ local function Lookup(self, itemID)
     return out
 end
 
--- QuestieDB's data doesn't change during a session, and an item can drop from hundreds of creatures, so each item is
--- looked up once; callers copy what they change
-local cache = {}
-function CS:GetQuestieSources(itemID)
-    if not itemID or not self:HasQuestieDB() then return nil end
+-- The built-in sources (from AllTheThings), shaped like QuestieDB's, so either works alone
+local function MapName(uiMap)
+    local info = uiMap and uiMap > 0 and C_Map.GetMapInfo(uiMap)
+    return info and info.name or nil
+end
+
+local function MySide()
+    return UnitFactionGroup("player") == "Horde" and 2 or 1
+end
+
+local function BuiltinNpc(id)
+    local name = CS:NpcName(id)
+    if not name then return nil end
+    local l = CS.BUILTIN_LEVELS and CS.BUILTIN_LEVELS[id]
+    local level = l and l[1] > 0 and (l[2] > l[1] and (l[1] .. "-" .. l[2]) or tostring(l[1])) or nil
+    local zones = CS:GetPlaces(id)
+    if #zones == 0 then zones = CS:NpcZones(id) or {} end
+    return { npc = id, name = name, level = level, rank = l and RANK[l[3]], zones = zones, pin = CS:GetPin(id),
+        side = l and l[4] or 0 }
+end
+
+local function BuiltinLookup(itemID)
+    local src = CS.BUILTIN_ITEM_SOURCES and CS.BUILTIN_ITEM_SOURCES[itemID]
+    if not src then return nil end
+    local mine = MySide()
+    local out = { drops = {}, vendors = {}, objects = {}, quests = {} }
+    for _, id in ipairs(src[1]) do out.drops[#out.drops + 1] = BuiltinNpc(id) end
+    for _, id in ipairs(src[2]) do
+        local e = BuiltinNpc(id)
+        if e and (e.side == 0 or e.side == mine) then out.vendors[#out.vendors + 1] = e end
+    end
+    for _, id in ipairs(src[3]) do
+        local o = CS.BUILTIN_OBJECTS and CS.BUILTIN_OBJECTS[id]
+        if o then
+            out.objects[#out.objects + 1] = { id = id, name = o[1], zones = { MapName(o[2]) },
+                pin = o[3] > 0 and { o[2], o[3] / 1000, o[4] / 1000 } or nil }
+        end
+    end
+    for _, id in ipairs(src[4]) do
+        local q = CS.BUILTIN_REWARDS and CS.BUILTIN_REWARDS[id]
+        if q and (q[4] == 0 or q[4] == mine) then
+            local giver = q[2] > 0 and BuiltinNpc(q[2])
+            out.quests[#out.quests + 1] = { name = q[1], giver = giver and giver.name,
+                zone = giver and giver.zones[1] or MapName(q[3]), pin = giver and giver.pin }
+        end
+    end
+    return out
+end
+
+-- Both sources together, QuestieDB's rows added where the built-in ones lack them
+local function Merge(a, b)
+    if not a then return b end
+    if not b then return a end
+    for _, kind in ipairs({ "drops", "vendors" }) do
+        local have = {}
+        for _, e in ipairs(a[kind]) do have[e.npc] = true end
+        for _, e in ipairs(b[kind]) do
+            if not have[e.npc] then a[kind][#a[kind] + 1] = e end
+        end
+    end
+    local objects, quests = {}, {}
+    for _, o in ipairs(a.objects) do objects[o.id] = true end
+    for _, o in ipairs(b.objects) do
+        if not objects[o.id] then a.objects[#a.objects + 1] = o end
+    end
+    for _, q in ipairs(a.quests) do quests[q.name] = true end
+    for _, q in ipairs(b.quests) do
+        if not quests[q.name] then a.quests[#a.quests + 1] = q end
+    end
+    return a
+end
+
+-- Neither source changes during a session, and an item can drop from hundreds of creatures, so each item is looked up
+-- once; callers copy what they change
+local cache, cachedWithQuestie = {}, nil
+function CS:GetItemSources(itemID)
+    if not itemID then return nil end
+    -- QuestieDB showing up later (loaded on demand) starts the cache over
+    local questie = self:HasQuestieDB()
+    if questie ~= cachedWithQuestie then
+        wipe(cache)
+        cachedWithQuestie = questie
+    end
     local hit = cache[itemID]
     if hit == nil then
-        hit = Lookup(self, itemID) or false
-        cache[itemID] = hit
+        hit = Merge(BuiltinLookup(itemID), questie and Lookup(self, itemID) or nil)
+        if hit and #hit.drops + #hit.vendors + #hit.objects + #hit.quests == 0 then hit = nil end
+        cache[itemID] = hit or false
     end
     return hit or nil
 end

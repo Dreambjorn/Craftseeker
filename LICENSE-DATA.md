@@ -14,9 +14,11 @@ generated from the sources below. Each source keeps its licence, and its notice 
 | `Q` | Quests that teach recipes, with givers and places | AllTheThings | MIT |
 | `N` | Map pins | EG Link, AllTheThings | CC BY 4.0 |
 | `S` | How each recipe is learned | WhatsTraining | MIT |
+| `W`, `O`, `U` | Creatures, vendors, objects and quests each recipe item and reagent comes from | AllTheThings | MIT |
+| `M`, `L` | Creature names, levels, ranks and factions | AllTheThings, Drop Tables, EG Link, game client | CC BY-SA 4.0 |
 | `D`, `I`, `K`, `A`, `C`, `X` | Recipes, items, skill colours, zone maps, class spells, dungeon and raid names | Game client | Game data |
 
-`R`, `G` and `Z` hold data adapted from CC BY-SA 4.0 sources, so they are shared under CC BY-SA 4.0
+`R`, `G`, `Z`, `M` and `L` hold data adapted from CC BY-SA 4.0 sources, so they are shared under CC BY-SA 4.0
 (https://creativecommons.org/licenses/by-sa/4.0/); anything made from them must be too. Craftseeker's own
 changes to the other tables are under the MIT License, while the data they come from keeps the licence
 named for it.
@@ -25,7 +27,8 @@ named for it.
 
 Drop Tables contributors, https://github.com/valcheffnet/DropTables, licensed under CC BY-SA 4.0.
 
-- Used in: `R` (loot counts), `G` (skinning counts) and `Z` (the maps players killed each creature on).
+- Used in: `R` (loot counts), `G` (skinning counts), `Z` (the maps players killed each creature on), and `M`
+  and `L` (creature names and levels).
 - Changed by Craftseeker: loot counts reduced to recipe items and skinning counts to reagents, every creature with
   a count kept, chances worked out with Drop Tables' formula and rounded to hundredths of a percent.
 
@@ -114,7 +117,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-- Used in: `Q` (quest names, givers and places), `Z` (instance names and places) and the map pins in `N`
+- Used in: `Q` (quest names, givers and places), `W`, `O` and `U` (where recipe items and reagents come from),
+  creature names in `M`, factions in `L`, `Z` (instance names and places) and the map pins in `N`
   that EG Link has no position for.
 
 ## WhatsTraining
