@@ -77,8 +77,17 @@ local function NotFound(name)
                 Transmit(r.m)
             end
         end
+    elseif dashedFor[name] then
+        -- the server may name a failed "First-Last" whisper with a space too: once those went out, skip the player
+        local d = dashedFor[name]
+        local sent = recent[d]
+        if sent and sent[#sent] and now - sent[#sent].at <= ERROR_WINDOW then
+            if not offline[d] then CS:Debug("%s not found either; no whispers to them for 30 minutes", d) end
+            offline[d] = now
+        end
     else
-        CS:Debug("%s not found; no whispers to them for 30 minutes", name)
+        -- one error per queued message: say it once
+        if not offline[name] then CS:Debug("%s not found; no whispers to them for 30 minutes", name) end
         offline[name] = now
     end
 end
