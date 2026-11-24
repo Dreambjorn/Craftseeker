@@ -42,12 +42,6 @@ Reagents in your bags and bank get one line in their tooltip, saying how many re
 
 ## FAQ
 
-**Q: Do I need Questie?**
-
-**A:** No. With QuestieDB installed, recipe items and reagents also list the creatures that drop them, the vendors that sell them and the quests that reward them.
-
-<br>
-
 **Q: Why are some drop rates missing?**
 
 **A:** A rate shows once someone has looted that creature. Rare drops often have no measured rate yet; they fill in as you and other players loot.
