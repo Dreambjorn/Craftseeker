@@ -50,7 +50,8 @@ end
 
 -- QuestieDB's name for a creature, or nil
 function CS:NpcName(npcID)
-    return npcID and self:HasQuestieDB() and NpcDB.Get(npcID, "name") or nil
+    if not npcID then return nil end
+    return self:HasQuestieDB() and NpcDB.Get(npcID, "name") or (self.BUILTIN_NAMES and self.BUILTIN_NAMES[npcID]) or nil
 end
 
 -- QuestieDB's name, zones and map pin for a node or chest, or nil
