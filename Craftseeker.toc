@@ -3,7 +3,7 @@
 ## Category: Professions
 ## Notes: Shows what you can craft with a reagent, how to learn each recipe, and where reagents come from.
 ## Author: Dreambjorn
-## Version: 1.0.0
+## Version: 1.1.0
 ## X-License: MIT (code); data licences in LICENSE-DATA.md
 ## SavedVariables: CraftseekerDB
 ## OptionalDeps: QuestieDB
