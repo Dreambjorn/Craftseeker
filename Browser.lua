@@ -424,11 +424,12 @@ end
 
 -- Blanks the game data left (zones, level, map pin) filled from what we and other Craftseeker users saw
 local function FillSeen(entry, npc)
-    local complete = #(entry.zones or {}) > 0 and entry.pin and (entry.level or not entry.npc)
+    local complete = #(entry.zones or {}) > 0 and entry.pin and (entry.level and entry.rank or not entry.npc)
     if not npc or complete then return end
     local seen = CS:SeenNpc(npc)
     if #(entry.zones or {}) == 0 then entry.zones = seen.zones end
     if entry.npc and not entry.level then entry.level = seen.level end
+    if entry.npc and not entry.rank then entry.rank = seen.rank end
     entry.pin = entry.pin or seen.pin
 end
 
@@ -570,7 +571,9 @@ local function AddVendors(itemID, qs, heading)
     local seen, own = CS:SeenPrices(itemID)
     for npc, p in pairs(seen) do
         local entry = byNpc[npc]
-        if not entry and own[npc] then
+        -- a vendor only players have seen joins the list: ours, or another user's of our faction (or neutral)
+        local faction = not own[npc] and CS:SeenNpc(npc).faction
+        if not entry and (own[npc] or faction == 3 or faction == (CS.PlayerFaction() == 2 and 2 or 1)) then
             entry = { name = p[3] or CS:NpcName(npc) or ("NPC " .. npc), zones = CS:GetPlaces(npc), price = "",
                 pin = CS:GetPin(npc) }
             byNpc[npc] = entry
@@ -597,23 +600,38 @@ local function AddVendors(itemID, qs, heading)
 end
 
 -- Quests that teach a recipe or reward its recipe item: name, who gives it and where
-local function AddQuests(recipeID, qs)
+local function AddQuests(recipeID, qs, teach)
     local list, seen = {}, {}
     for _, q in ipairs(CS:GetRecipeQuests(recipeID) or {}) do
         list[#list + 1] = q
         seen[q.name] = true
     end
+    -- then the item sources' quests and the ones players saw offering the recipe item
     for _, q in ipairs(qs and qs.quests or {}) do
-        if not seen[q.name] then list[#list + 1] = q end
+        if not seen[q.name] then
+            list[#list + 1] = q
+            seen[q.name] = true
+        end
+    end
+    for _, q in ipairs(teach and teach > 0 and CS:SeenQuests(teach) or {}) do
+        if not seen[q.name] then
+            list[#list + 1] = q
+            seen[q.name] = true
+        end
     end
     if #list == 0 then return false end
     AddHeading(#list == 1 and "Quest" or ("%d quests"):format(#list))
     local rows = {}
     for _, q in ipairs(list) do
-        local name = q.name .. (q.level and (GREY .. " (" .. q.level .. ")|r") or "")
+        -- the opposite faction's quests (listed with the setting on) are greyed
+        local name = (q.opposite and GREY or "") .. q.name .. (q.opposite and "|r" or "")
+            .. (q.level and (GREY .. " (" .. q.level .. ")|r") or "")
+        local tip = { q.name, q.giver and ("Given by " .. q.giver) or "Giver not recorded" }
+        if q.zone then tip[#tip + 1] = "In " .. q.zone end
+        if q.level then tip[#tip + 1] = "Level " .. q.level end
+        if q.opposite then tip[#tip + 1] = "Only the opposite faction gets this quest" end
         rows[#rows + 1] = { cells = { name, q.giver or (GREY .. "unknown|r"), q.zone or (GREY .. "unknown|r") },
-            tip = { q.name, q.giver and ("Given by " .. q.giver) or "Giver not recorded", q.zone and ("In " .. q.zone) or nil,
-                    q.level and ("Level " .. q.level) or nil }, pin = q.pin }
+            tip = tip, pin = q.pin }
     end
     AddTable({ "Quest", "Given by", "Zone" }, rows, nil, "quests")
     return true
@@ -731,7 +749,7 @@ local function AddLearn(recipeID, rec)
         AddText(poisons and "Learned with the Poisons skill" or "Learned automatically with the profession")
     end
 
-    local qs = info.teach > 0 and CS:GetQuestieSources(info.teach) or nil
+    local qs = info.teach > 0 and CS:GetItemSources(info.teach) or nil
     local shown = false
     if AddTrainers(recipeID) then
         shown = true
@@ -750,7 +768,7 @@ local function AddLearn(recipeID, rec)
         end
         shown = true
     end
-    if AddQuests(recipeID, qs) then
+    if AddQuests(recipeID, qs, info.teach) then
         shown = true
     elseif how:find("q") then
         local zones = AreaList(info.quests, 3, true)
@@ -942,7 +960,7 @@ function DrawDetail(keep)
     -- the looked-up reagent: vendors with prices, creatures with drop rates, objects, then what this account has seen
     if currentItem and not madeView then
         local name = CS:ItemName(currentItem) or "it"
-        local qs = CS:GetQuestieSources(currentItem)
+        local qs = CS:GetItemSources(currentItem)
         AddVendors(currentItem, qs, "Where to buy " .. name)
         AddDrops(currentItem, qs, name:gsub("%%", "%%%%") .. " drops from %d creature%s", "reagentDrops")
         AddGathering(currentItem, name)

@@ -62,7 +62,10 @@ end
 
 -- What we learn about a creature the game data may leave blank: name, level range, zones and, when we stood next
 -- to it (loot, a vendor or trainer window), a map pin. New facts count as news for other Craftseeker users.
-local function Learn(npc, name, level, near)
+local RANK_CODE = { elite = 1, rareelite = 2, worldboss = 3, rare = 4 }
+local FACTION_CODE = { Alliance = 1, Horde = 2 }
+
+local function Learn(npc, name, level, near, unit)
     local e, news = CS.data.npcs[npc], false
     if not e then
         e, news = { z = {} }, true
@@ -80,6 +83,17 @@ local function Learn(npc, name, level, near)
         e.p = PlayerPin()
         news = news or e.p ~= nil
     end
+    -- rank (elite, rare...) from any look at the unit; faction only from a vendor or trainer we spoke to (3 neutral)
+    if unit then
+        local class = UnitClassification(unit)
+        local rank = class and not CS.IsSecret(class) and RANK_CODE[class]
+        if rank and e.r ~= rank then e.r, news = rank, true end
+        if near then
+            local faction = UnitFactionGroup(unit)
+            local code = faction and not CS.IsSecret(faction) and FACTION_CODE[faction] or 3
+            if e.f ~= code then e.f, news = code, true end
+        end
+    end
     if news then CS.data.countsStamp = time() end
 end
 CS.LearnNpc = Learn
@@ -89,7 +103,7 @@ local function Remember(unit)
     if not guid or CS.IsSecret(guid) or not IsNPCGUID(guid) then return end
     if guidNames[guid] then return end
     local npc = NpcOf(guid)
-    if npc and Tracking() and CS:IsSourceNpc(npc) then Learn(npc, UnitName(unit), UnitLevel(unit)) end
+    if npc and Tracking() and CS:IsSourceNpc(npc) then Learn(npc, UnitName(unit), UnitLevel(unit), false, unit) end
     local name = UnitName(unit)
     if not name or CS.IsSecret(name) then return end
     -- session-only cache; drop it rather than let it grow all evening
@@ -136,7 +150,7 @@ function Sources:MERCHANT_SHOW()
             end
         end
     end
-    if npc and (sells or CS:IsSourceNpc(npc)) then Learn(npc, vendor, UnitLevel("npc"), true) end
+    if npc and (sells or CS:IsSourceNpc(npc)) then Learn(npc, vendor, UnitLevel("npc"), true, "npc") end
     -- a new price is news for other Craftseeker users, like new loot, and redraws an open window
     if changed then
         CS.data.countsStamp = time()
@@ -288,11 +302,45 @@ function Sources:LOOT_READY()
     end
 end
 
+-- Quests whose rewards hold a reagent or recipe item: name, giver and the factions that saw them offered
+function Sources:QuestRewards()
+    if not Tracking() or not GetQuestID then return end
+    local id = GetQuestID()
+    if not id or CS.IsSecret(id) or id == 0 then return end
+    local items = {}
+    for _, kind in ipairs({ { "reward", GetNumQuestRewards() }, { "choice", GetNumQuestChoices() } }) do
+        for i = 1, kind[2] or 0 do
+            local link = GetQuestItemLink(kind[1], i)
+            local itemID = link and not CS.IsSecret(link) and CS.ItemIDFromText(link)
+            if itemID and (CS.usedIn[itemID] or CS.recipeItems[itemID]) then items[itemID] = true end
+        end
+    end
+    if not next(items) then return end
+    local q, news = CS.data.quests[id], false
+    if not q then
+        q, news = { i = {} }, true
+        CS.data.quests[id] = q
+    end
+    local title = GetTitleText()
+    if title and not CS.IsSecret(title) and title ~= "" then q.n = title end
+    local giver = NpcOf(UnitGUID("npc"))
+    if giver then
+        q.g = giver
+        Learn(giver, UnitName("npc"), UnitLevel("npc"), true, "npc")
+    end
+    local side = UnitFactionGroup("player") == "Horde" and 2 or 1
+    if q.s ~= side and q.s ~= 3 then q.s, news = (q.s and q.s ~= side) and 3 or side, true end
+    for item in pairs(items) do
+        if not q.i[item] then q.i[item], news = true, true end
+    end
+    if news then CS.data.countsStamp = time() end
+end
+
 -- Trainers that teach recipes: where they stand
 function Sources:TRAINER_SHOW()
     if not Tracking() then return end
     local npc = NpcOf(UnitGUID("npc"))
-    if npc and CS:IsSourceNpc(npc) then Learn(npc, UnitName("npc"), UnitLevel("npc"), true) end
+    if npc and CS:IsSourceNpc(npc) then Learn(npc, UnitName("npc"), UnitLevel("npc"), true, "npc") end
 end
 
 function Sources:LOOT_CLOSED()
@@ -306,6 +354,8 @@ function Sources:OnEnable()
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self:RegisterEvent("MERCHANT_SHOW")
     self:RegisterEvent("TRAINER_SHOW")
+    self:RegisterEvent("QUEST_DETAIL", "QuestRewards")
+    self:RegisterEvent("QUEST_COMPLETE", "QuestRewards")
     self:RegisterEvent("LOOT_READY")
     self:RegisterEvent("LOOT_CLOSED")
 end

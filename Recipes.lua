@@ -404,15 +404,18 @@ function CS:IsSourceNpc(npc)
     return self.sourceNpcs[npc] or self:IsRelevantNpc(npc) or self.data.npcs[npc] ~= nil
 end
 
+local SEEN_RANK = { "Elite", "Rare Elite", "Boss", "Rare" }
+
 -- What we and other Craftseeker users saw of a creature: name, "lo-hi" level, zones (most seen first), pin
 function CS:SeenNpc(npc)
     local own = self.data.npcs[npc]
     local name, lo, hi, pin, times = own and own.n, own and own.lo, own and own.hi, own and own.p, {}
+    local rank, faction = own and own.r, own and own.f
     for zone, n in pairs(own and own.z or {}) do times[zone] = n end
     for _, peer in pairs(self.data.shared) do
         local e = peer.npcs and peer.npcs[npc]
         if e then
-            name, pin = name or e.n, pin or e.p
+            name, pin, rank, faction = name or e.n, pin or e.p, rank or e.r, faction or e.f
             if e.lo and (not lo or e.lo < lo) then lo = e.lo end
             if e.hi and (not hi or e.hi > hi) then hi = e.hi end
             for zone, n in pairs(e.z or {}) do times[zone] = (times[zone] or 0) + n end
@@ -422,11 +425,34 @@ function CS:SeenNpc(npc)
     for zone in pairs(times) do zones[#zones + 1] = zone end
     table.sort(zones, function(a, b) return times[a] > times[b] end)
     local level = lo and (hi and hi > lo and (lo .. "-" .. hi) or tostring(lo)) or nil
-    return { name = name, level = level, zones = zones, pin = pin and { pin[1], pin[2] / 1000, pin[3] / 1000 } }
+    return { name = name, level = level, zones = zones, pin = pin and { pin[1], pin[2] / 1000, pin[3] / 1000 },
+        rank = SEEN_RANK[rank or 0], faction = faction }
 end
 
 function CS:SeenNpcName(npc)
     return npc and self:SeenNpc(npc).name or nil
+end
+
+-- Quests that players saw offering an item as a reward, for this character's faction (the opposite faction's too with
+-- "Show opposite faction" on): { { name, giver, zone, pin, opposite }, ... }
+function CS:SeenQuests(itemID)
+    local mine = self.PlayerFaction() == 2 and 2 or 1
+    local both = self.data.settings.opposite
+    local out, seen = {}, {}
+    local function Take(id, q)
+        local ours = q.s == mine or q.s == 3
+        if seen[id] or not q.n or not q.i[itemID] or not (ours or both) then return end
+        seen[id] = true
+        local who = q.g and self:SeenNpc(q.g)
+        local zones = q.g and self:GetPlaces(q.g) or {}
+        out[#out + 1] = { name = q.n, giver = q.g and (self:NpcName(q.g) or who.name),
+            zone = zones[1] or (who and who.zones[1]), pin = q.g and (self:GetPin(q.g) or who.pin), opposite = not ours }
+    end
+    for id, q in pairs(self.data.quests) do Take(id, q) end
+    for _, peer in pairs(self.data.shared) do
+        for id, q in pairs(peer.quests or {}) do Take(id, q) end
+    end
+    return out
 end
 
 -- Where we or another Craftseeker user stood looting an object

@@ -144,12 +144,20 @@ function Share:Serialize()
         for zone, n in pairs(zones) do fields[#fields + 1] = Escape(zone) .. ":" .. n end
         Add(fields)
     end
+    -- quests as "q<quest>,name,giver,factions,item,...", for quests rewarding reagents or recipe items
+    for id, q in pairs(CS.data.quests) do
+        local fields = { "q" .. id, Escape(q.n or ""), q.g or 0, q.s or 0 }
+        for item in pairs(q.i) do fields[#fields + 1] = item end
+        Add(fields)
+    end
     -- creatures as "n<npc>,name,lo,hi,@map:x:y,zone:times,..."
     for npc, e in pairs(CS.data.npcs) do
         local fields = { "n" .. npc, Escape(e.n or ""), e.lo or 0, e.hi or 0,
             e.p and ("@%d:%d:%d"):format(e.p[1], e.p[2], e.p[3]) or "@" }
         for zone, n in pairs(e.z or {}) do fields[#fields + 1] = Escape(zone) .. ":" .. n end
         Add(fields)
+        -- rank and faction in an entry of their own ("f<npc>,rank,faction"), which 1.0.0 skips
+        if e.r or e.f then Add({ "f" .. npc, e.r or 0, e.f or 0 }) end
     end
     return table.concat(parts, ";")
 end
@@ -157,7 +165,7 @@ end
 -- Their counts and vendor prices back, checked: whole numbers only, drops never above corpses, at most MAX_OPENED
 -- corpses each, prices below 10,000 gold
 function Share.Parse(text)
-    local counts, prices, objects, objectPins, npcs, gather = {}, {}, {}, {}, {}, { k = {}, g = {} }
+    local counts, prices, objects, objectPins, npcs, gather, quests = {}, {}, {}, {}, {}, { k = {}, g = {} }, {}
     for entry in text:gmatch("[^;]+") do
         local fields = { strsplit(",", entry) }
         local gkind, gid = fields[1]:match("^([kg])(%d+)$")
@@ -181,8 +189,28 @@ function Share.Parse(text)
         local npc = tonumber(fields[1]:match("^n(%d+)$"))
         if npc and #fields >= 5 then
             local lo, hi = tonumber(fields[3]), tonumber(fields[4])
-            npcs[npc] = { n = Unescape(fields[2]), lo = lo and lo > 0 and lo <= 100 and lo or nil,
-                hi = hi and hi > 0 and hi <= 100 and hi or nil, p = ParsePin(fields[5]), z = ParseZones(fields, 6, MAX_OPENED) }
+            local e = npcs[npc] or {}
+            npcs[npc] = e
+            e.n, e.lo = Unescape(fields[2]), lo and lo > 0 and lo <= 100 and lo or nil
+            e.hi, e.p, e.z = hi and hi > 0 and hi <= 100 and hi or nil, ParsePin(fields[5]), ParseZones(fields, 6, MAX_OPENED)
+        end
+        local quest = tonumber(fields[1]:match("^q(%d+)$"))
+        if quest and #fields >= 5 then
+            local giver, sides = tonumber(fields[3]), tonumber(fields[4])
+            local q = { n = Unescape(fields[2]), g = giver and giver > 0 and giver or nil,
+                s = sides and sides >= 1 and sides <= 3 and sides or nil, i = {} }
+            for i = 5, math.min(#fields, 20) do
+                local item = tonumber(fields[i])
+                if item and item > 0 then q.i[item] = true end
+            end
+            if q.n and q.s and next(q.i) then quests[quest] = q end
+        end
+        local ranked = tonumber(fields[1]:match("^f(%d+)$"))
+        if ranked then
+            local rank, faction = tonumber(fields[2]), tonumber(fields[3])
+            npcs[ranked] = npcs[ranked] or { z = {} }
+            npcs[ranked].r = rank and rank >= 1 and rank <= 4 and rank or nil
+            npcs[ranked].f = faction and faction >= 1 and faction <= 3 and faction or nil
         end
         local vendor = tonumber(fields[1]:match("^v(%d+)$"))
         for i = 2, vendor and #fields or 0 do
@@ -205,7 +233,7 @@ function Share.Parse(text)
             counts[npc] = c
         end
     end
-    return counts, prices, objects, objectPins, npcs, gather
+    return counts, prices, objects, objectPins, npcs, gather, quests
 end
 
 -- Keeps the newest MAX_PEERS installs and drops those not heard from in a month
@@ -401,9 +429,9 @@ function Share:OnMessage(msg, chatType, sender, bnAccount)
             end
             Tally(heard.data, chatType)
             CS:Debug("counts received from %s (%s, install %s)", tostring(sender or bnAccount), chatType, install)
-            local counts, prices, objects, objectPins, npcs, gather = Share.Parse(text)
+            local counts, prices, objects, objectPins, npcs, gather, quests = Share.Parse(text)
             shared[install] = { stamp = stamp, from = sender, at = time(), counts = counts, prices = prices,
-                objects = objects, objectPins = objectPins, npcs = npcs, gather = gather }
+                objects = objects, objectPins = objectPins, npcs = npcs, gather = gather, quests = quests }
             Share.Trim()
             CS:CountsChanged()
         end

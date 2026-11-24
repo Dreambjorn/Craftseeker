@@ -16,6 +16,7 @@ local defaults = {
         gather = { k = {}, g = {} }, -- skinning etc. by creature (k) and nodes/chests by object (g): { p, k, i, n }
         objectPins = {},           -- [objectID] = { uiMap, x, y } in thousandths, where we stood looting it
         npcs = {},                 -- [npcID] = { n = name, lo, hi = level range, z = { [zone] = times }, p = pin }
+        quests = {},               -- [questID] = { n = name, g = giver npcID, s = factions (1, 2, 3 both), i = { [itemID] = true } }
         favorites = {},            -- [recipeID] = true: the browser's Favorites section, every character
         prices = {},               -- [itemID] = { [npc] = { copper per stack, stack, vendor name } }: our vendor visits
         skills = {},               -- [character] = { [profession] = rank }
@@ -120,7 +121,7 @@ function CS:SlashCommand(input)
             print("  " .. p .. ": " .. n)
         end
     elseif cmd == "reset" then
-        wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared); wipe(data.prices); wipe(data.objects); wipe(data.objectPins); wipe(data.npcs); wipe(data.gather.k); wipe(data.gather.g)
+        wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared); wipe(data.prices); wipe(data.objects); wipe(data.objectPins); wipe(data.npcs); wipe(data.gather.k); wipe(data.gather.g); wipe(data.quests)
         wipe(data.bridges.dt); wipe(data.bridges.fd); wipe(data.bridges.dtSkins)
         self:CountsChanged()
         self:KnownChanged()
