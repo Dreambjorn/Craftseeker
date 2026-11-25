@@ -62,24 +62,32 @@ function Options:BuildSettings()
         "Prints what sharing does (channel test, data received and sent, failed whispers) and names the addon behind the game's red \"doing that too fast\" errors.",
         function() return data.settings.debug end,
         function(value) data.settings.debug = value end, false)
-    -- a page to leave out professions none of the characters will learn
-    local sub = Settings.RegisterVerticalLayoutSubcategory(category, "Professions and classes")
-    local profs, seen = {}, {}
+    -- pages to leave out professions and classes none of the characters will learn; poisons are the rogue's
+    local isClass = { Poisons = true }
+    for id, rec in pairs(CS.recipes) do
+        if rec.p and CS.BUILTIN_CLASS and CS.BUILTIN_CLASS[id] then isClass[rec.p] = true end
+    end
+    local profs, classes, seen = {}, {}, {}
     for _, rec in pairs(CS.recipes) do
         if rec.p and not seen[rec.p] then
             seen[rec.p] = true
-            profs[#profs + 1] = rec.p
+            table.insert(isClass[rec.p] and classes or profs, rec.p)
         end
     end
-    table.sort(profs)
-    for _, p in ipairs(profs) do
-        AddCheckbox(sub, "show_" .. (p:gsub("%W", "")), p, "Lists " .. p .. " recipes or class spells. Untick it to hide them everywhere.",
-            function() return not data.settings.hidden[p] end,
-            function(value)
-                data.settings.hidden[p] = not value or nil
-                self:SendMessage("CRAFTSEEKER_FILTER")
-            end)
+    local function AddPage(name, list, what)
+        local sub = Settings.RegisterVerticalLayoutSubcategory(category, name)
+        table.sort(list)
+        for _, p in ipairs(list) do
+            AddCheckbox(sub, "show_" .. (p:gsub("%W", "")), p, ("Lists %s %s. Untick it to hide them everywhere."):format(p, what),
+                function() return not data.settings.hidden[p] end,
+                function(value)
+                    data.settings.hidden[p] = not value or nil
+                    self:SendMessage("CRAFTSEEKER_FILTER")
+                end)
+        end
     end
+    AddPage("Professions", profs, "recipes")
+    AddPage("Classes", classes, "spells that use reagents")
     Settings.RegisterAddOnCategory(category)
     self.categoryID = category:GetID()
 end
