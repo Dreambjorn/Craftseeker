@@ -421,10 +421,11 @@ local SOURCE_COLUMNS = { nil, nil, nil, "RIGHT", "RIGHT" }
 local groupNeed, groupDrawn, needGrew = {}, {}, false
 
 -- header: column titles or nil; rows: { cells = { text, ... }, tip = { line, ... }, pin }; justify: per column.
--- Long tables show their first rows and a button for the rest; key names the table for that button.
+-- Long tables show their first rows and grow TABLE_MORE at a time, so a reagent dropped by hundreds of creatures
+-- never builds hundreds of row frames at once; key names the table for its buttons.
+local TABLE_MORE = 50
 local function AddTable(header, rows, justify, key, group)
-    local shown = #rows
-    if shown > TABLE_ROWS and not expanded[key] then shown = TABLE_ROWS end
+    local shown = math.min(#rows, expanded[key] or TABLE_ROWS)
     local need = {}
     local function Measure(cells, font)
         for i = 1, #cells do need[i] = math.max(need[i] or 0, math.ceil(TextWidth(cells[i], font)) + 13) end
@@ -460,13 +461,22 @@ local function AddTable(header, rows, justify, key, group)
         end
         AddRow(Columns(r.cells), r.tip, nil, click)
     end
-    if #rows > TABLE_ROWS then
-        AddRow({ { GOLD .. (expanded[key] and "Show fewer" or ("Show all " .. #rows)) .. "|r", DETAIL_W } }, nil, nil, function()
-            expanded[key] = not expanded[key]
+    local left = #rows - shown
+    if left > 0 then
+        local more = math.min(left, TABLE_MORE)
+        AddRow({ { GOLD .. ("Show %d more|r%s"):format(more, GREY .. ", " .. #rows .. " total|r"), DETAIL_W } }, nil, nil,
+            function()
+                expanded[key] = shown + more
+                ShowDetail(true)
+            end)
+    end
+    if shown > TABLE_ROWS then
+        AddRow({ { GOLD .. "Show fewer|r", DETAIL_W } }, nil, nil, function()
+            expanded[key] = nil
             ShowDetail(true)
         end)
-        cursor = cursor - 10 -- keeps the button apart from the next heading
     end
+    if #rows > TABLE_ROWS then cursor = cursor - 10 end -- keeps the buttons apart from the next heading
 end
 
 local function AddSlot(itemID, spellID, label)
