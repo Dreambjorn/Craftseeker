@@ -14,7 +14,7 @@ generated from the sources below. Tables are named as `Data.lua` defines them. E
 | `BUILTIN_QUESTS` | Quests that teach recipes, with givers and places | AllTheThings | MIT |
 | `BUILTIN_PINS` | Map pins | EG Link, AllTheThings, Craftseeker users | CC BY 4.0 |
 | `BUILTIN_SOURCES` | How each recipe is learned | WhatsTraining | MIT |
-| `BUILTIN_ITEM_SOURCES`, `BUILTIN_OBJECTS`, `BUILTIN_REWARDS` | Creatures, vendors, objects and quests each recipe item and reagent comes from | AllTheThings, Craftseeker users | MIT |
+| `BUILTIN_ITEM_SOURCES`, `BUILTIN_OBJECTS`, `BUILTIN_REWARDS` | Creatures, vendors, objects, quests and containers each recipe item and reagent comes from | AllTheThings, Craftseeker users | MIT |
 | `BUILTIN_NAMES`, `BUILTIN_LEVELS` | Creature names, levels, ranks and factions | AllTheThings, Drop Tables, EG Link, game client, Craftseeker users | CC BY-SA 4.0 |
 | `BUILTIN`, `BUILTIN_ITEMS`, `BUILTIN_SKILL`, `BUILTIN_AREAMAPS`, `BUILTIN_CLASS`, `BUILTIN_INSTANCES`, `BUILTIN_CATEGORIES`, `BUILTIN_CATEGORY` | Recipes, items, skill colours, zone maps, class spells, dungeon and raid names, profession window categories | Game client | Game data |
 | `BUILTIN_UNCONFIRMED` | Recipes no player has seen on WoW: Forever yet | Worked out from the sources above | MIT |
