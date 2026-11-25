@@ -609,7 +609,57 @@ function CS:SetTracked(recipeID, on)
     return (pcall(C_TradeSkillUI.SetRecipeTracked, recipeID, on, false))
 end
 
--- The browser's Filter menu: each ticked filter must hold for a recipe to be listed
+function CS:TrackedRecipes()
+    local ok, list = pcall(C_TradeSkillUI.GetRecipesTracked, false)
+    return ok and type(list) == "table" and list or {}
+end
+
+-- The profession window's category of a recipe (Bags, Cloaks, ...): its name and order there
+function CS:Category(recipeID)
+    local id = self.BUILTIN_CATEGORY and self.BUILTIN_CATEGORY[recipeID]
+    local c = id and self.BUILTIN_CATEGORIES[id]
+    if c then return c[1], c[2] end
+end
+
+-- The Filter menu's Sources, as the learn data's letters; class spells come from class trainers
+CS.SOURCE_FILTERS = { { "t", "Trainer" }, { "v", "Vendor" }, { "d", "Drop" }, { "q", "Quest" }, { "w", "World object" },
+    { "c", "Another profession" }, { "a", "Learned with the profession" } }
+
+function CS:LearnSources(recipeID)
+    if self.BUILTIN_CLASS and self.BUILTIN_CLASS[recipeID] then return "t" end
+    local info = self:GetLearnInfo(recipeID)
+    local how = info and info.how or ""
+    if not how:find("t") and self.BUILTIN_TRAINERS and self.BUILTIN_TRAINERS[recipeID] then how = how .. "t" end
+    return how
+end
+
+-- The Filter menu's Slots, from the crafted item's equip slot
+local SLOT_OF = { INVTYPE_HEAD = "Head", INVTYPE_NECK = "Neck", INVTYPE_SHOULDER = "Shoulder", INVTYPE_CLOAK = "Back",
+    INVTYPE_CHEST = "Chest", INVTYPE_ROBE = "Chest", INVTYPE_BODY = "Shirt", INVTYPE_TABARD = "Tabard",
+    INVTYPE_WRIST = "Wrist", INVTYPE_HAND = "Hands", INVTYPE_WAIST = "Waist", INVTYPE_LEGS = "Legs", INVTYPE_FEET = "Feet",
+    INVTYPE_FINGER = "Finger", INVTYPE_TRINKET = "Trinket", INVTYPE_WEAPON = "One-Hand", INVTYPE_WEAPONMAINHAND = "One-Hand",
+    INVTYPE_2HWEAPON = "Two-Hand", INVTYPE_WEAPONOFFHAND = "Off Hand", INVTYPE_HOLDABLE = "Off Hand",
+    INVTYPE_SHIELD = "Shield", INVTYPE_RANGED = "Ranged", INVTYPE_RANGEDRIGHT = "Ranged", INVTYPE_THROWN = "Ranged",
+    INVTYPE_AMMO = "Ammo", INVTYPE_BAG = "Bag", INVTYPE_QUIVER = "Bag" }
+CS.SLOT_FILTERS = { "Head", "Neck", "Shoulder", "Back", "Chest", "Shirt", "Tabard", "Wrist", "Hands", "Waist", "Legs",
+    "Feet", "Finger", "Trinket", "One-Hand", "Two-Hand", "Off Hand", "Shield", "Ranged", "Ammo", "Bag", "Not equipment" }
+local slotCache = {}
+
+function CS:RecipeSlot(recipeID)
+    local rec = self.recipes[recipeID]
+    local item = rec and rec.o
+    if not item then return "Not equipment" end
+    local slot = slotCache[item]
+    if not slot then
+        local loc = C_Item.GetItemInfoInstant and select(4, C_Item.GetItemInfoInstant(item))
+        slot = SLOT_OF[loc or ""] or "Not equipment"
+        slotCache[item] = slot
+    end
+    return slot
+end
+
+-- The browser's Filter menu: each ticked filter must hold for a recipe to be listed; sources and slots hold the
+-- unticked entries
 function CS:PassesFilters(recipeID)
     local filters, rec = self.data.settings.filters, self.recipes[recipeID]
     if not rec then return false end
@@ -617,6 +667,16 @@ function CS:PassesFilters(recipeID)
     if filters.skillUp and not self.SKILL_ATLAS[self:Difficulty(recipeID) or ""] then return false end
     if filters.unknown and self:WhoKnows(recipeID) == "me" then return false end
     if filters.materials and not self:HasMaterials(recipeID) then return false end
+    local hidden = filters.sources
+    if hidden and next(hidden) then
+        -- a recipe without learn data stays: hiding it would hide it for a gap in the data
+        local how, any = self:LearnSources(recipeID), false
+        for letter in how:gmatch(".") do
+            if not hidden[letter] then any = true end
+        end
+        if how ~= "" and not any then return false end
+    end
+    if filters.slots and filters.slots[self:RecipeSlot(recipeID)] then return false end
     return true
 end
 
@@ -631,7 +691,9 @@ function CS:HasMaterials(recipeID)
 end
 
 function CS:AnyFilter()
-    for _, on in pairs(self.data.settings.filters) do if on then return true end end
+    for _, on in pairs(self.data.settings.filters) do
+        if on == true or (type(on) == "table" and next(on)) then return true end
+    end
     return false
 end
 
