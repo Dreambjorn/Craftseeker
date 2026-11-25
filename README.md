@@ -50,7 +50,7 @@ Craftseeker works on its own. With [QuestieDB](https://github.com/Questie/Questi
 - ` /cs share ` — Turn sharing with other Craftseeker users on / off
 - ` /cs status ` — Check whether sharing reaches other players
 - ` /cs stats ` — What's been learned so far
-- ` /cs reset ` — Wipe all learned data
+- ` /cs reset ` — Wipe learned data; keeps favorites, settings and your characters' item counts and skill ranks
 ---
 
 ## FAQ

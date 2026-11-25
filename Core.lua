@@ -83,7 +83,7 @@ function CS:SlashCommand(input)
         print("  /cs minimap  - show or hide the minimap button")
         print("  /cs stats  - what's been learned so far")
         print("  /cs status  - whether sharing reaches other players this session")
-        print("  /cs reset  - wipe all learned data")
+        print("  /cs reset  - wipe learned data; keeps favorites, settings and your characters' item counts and skill ranks")
         print("  Alt+Click an item in your bags to look it up.")
     elseif cmd == "share" then
         data.settings.share = not data.settings.share
@@ -120,7 +120,8 @@ function CS:SlashCommand(input)
         self:KnownChanged()
         self:RebuildIndex()
         self:GetModule("Scanner"):ReadSpellbook()
-        self:Print("learned data wiped; built-in recipes remain. Known recipes are marked again from your spellbook.")
+        self:Print("learned data wiped; built-in recipes remain. Known recipes are marked again from your spellbook."
+            .. " Favorites, settings and your characters' item counts and skill ranks are kept.")
     else
         self:GetModule("Browser"):Show(msg)
     end
