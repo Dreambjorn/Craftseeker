@@ -529,26 +529,102 @@ local function ZoneCell(zones)
     return icon .. zones[1] .. (#zones > 1 and (GREY .. " +" .. (#zones - 1) .. "|r") or "")
 end
 
--- Chests, nodes and other objects an item comes from; QuestieDB lacks spawns for many, and where players looted
--- them fills in
-local function AddObjects(qs, heading, key)
-    if not qs or #qs.objects == 0 then return false end
+-- Chests and other objects an item comes from, and bag items that hold it when opened (clams, lockboxes), with how
+-- often each gave it where players counted; QuestieDB lacks spawns for many objects, and where players looted them
+-- fills in. Counted sources the lists lack are added, so whatever gave the item shows.
+local function IsLooted(g)
+    return g.kind == "c" or g.kind == "g" and g.p == "Chest"
+end
+
+local function AddObjects(itemID, qs, heading, key)
+    local byKey, list = {}, {}
+    local function Entry(kind, id)
+        local e = byKey[kind .. id]
+        if not e then
+            e = { kind = kind, id = id }
+            byKey[kind .. id] = e
+            list[#list + 1] = e
+        end
+        return e
+    end
+    for _, o in ipairs(qs and qs.objects or {}) do
+        local e = Entry("g", o.id)
+        e.name, e.zones, e.pin = o.name, o.zones, o.pin
+    end
+    for _, c in ipairs(qs and qs.containers or {}) do Entry("c", c.id) end
+    for _, g in ipairs(CS:GetGatherRates(itemID) or {}) do
+        if IsLooted(g) then
+            local e = Entry(g.kind, g.id)
+            e.chance, e.k, e.own, e.n = g.chance, g.k, g.own, g.n
+        end
+    end
+    if #list == 0 then return false end
+    -- one chest name spans several object ids (one per zone or model); a row each read as duplicates, so they merge
+    local byName, merged = {}, {}
+    for _, e in ipairs(list) do
+        if e.kind == "c" then
+            e.name = CS:ItemName(e.id) or ("Item " .. e.id)
+        else
+            if not e.name then
+                local qname, qzones, qpin = CS:ObjectInfo(e.id)
+                e.name, e.zones, e.pin = qname or e.n or ("Object " .. e.id), qzones, qpin
+            end
+            e.zones = e.zones and #e.zones > 0 and e.zones or CS:SeenObjectZones(e.id)
+            e.pin = e.pin or CS:SeenObjectPin(e.id)
+        end
+        local m = byName[e.kind .. e.name]
+        if not m then
+            m = { kind = e.kind, name = e.name, zones = {}, hasZone = {}, pin = e.pin, k = 0, drops = 0, own = 0 }
+            byName[e.kind .. e.name] = m
+            merged[#merged + 1] = m
+        end
+        for _, z in ipairs(e.zones or {}) do
+            if not m.hasZone[z] then m.zones[#m.zones + 1], m.hasZone[z] = z, true end
+        end
+        m.pin = m.pin or e.pin
+        if e.chance then
+            m.k, m.drops, m.own = m.k + e.k, m.drops + e.chance / 100 * e.k, m.own + (e.own or 0)
+        end
+    end
+    list = merged
+    for _, e in ipairs(list) do
+        if e.k > 0 then e.chance = math.min(e.drops / e.k, 1) * 100 end
+    end
+    table.sort(list, function(a, b)
+        if (a.chance or -1) ~= (b.chance or -1) then return (a.chance or -1) > (b.chance or -1) end
+        return a.name < b.name
+    end)
     AddHeading(heading, "lootall")
     local rows = {}
-    for _, o in ipairs(qs.objects) do
-        local zones = #o.zones > 0 and o.zones or CS:SeenObjectZones(o.id)
-        rows[#rows + 1] = { cells = { o.name, "", ZoneCell(zones), "", "" },
-            tip = { o.name, #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded" },
-            pin = o.pin or CS:SeenObjectPin(o.id) }
+    for i = 1, math.min(#list, TableLimit(key)) do
+        local e, how, zones, tip = list[i], "", nil, nil
+        if e.kind == "c" then
+            how, tip = GREY .. "Opened|r", { e.name, "Opened from the bags" }
+        else
+            zones = e.zones
+            tip = { e.name, #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded" }
+        end
+        tip[#tip + 1] = e.chance and ("%.2f%% over %d times opened"):format(e.chance, e.k) or "No measured rate yet"
+        if e.own and e.own > 0 then
+            tip[#tip + 1] = ("%d of those are your own"):format(e.own)
+        elseif e.chance then
+            tip[#tip + 1] = "All counted by other players"
+        end
+        rows[#rows + 1] = { cells = { e.name, how, zones and ZoneCell(zones) or "",
+            e.chance and ("%s%.2f%%|r"):format(GOLD, e.chance) or (GREY .. "no data|r"),
+            e.chance and ("%s(%d)|r"):format(GREY, e.k) or "" }, tip = tip, pin = e.pin }
     end
-    AddTable(nil, rows, SOURCE_COLUMNS, key, "sources")
+    AddTable(nil, rows, SOURCE_COLUMNS, key, "sources", #list)
     return true
 end
 
--- Skinning, mining and herb gathering corpses, and nodes and chests, with how often each gave the item
+-- Skinning, mining and herb gathering corpses and nodes, with how often each gave the item; chests go with the objects
 local function AddGathering(itemID)
-    local list = CS:GetGatherRates(itemID)
-    if not list then return false end
+    local list = {}
+    for _, g in ipairs(CS:GetGatherRates(itemID) or {}) do
+        if not IsLooted(g) then list[#list + 1] = g end
+    end
+    if #list == 0 then return false end
     local rows = {}
     for i = 1, math.min(#list, TableLimit("gathering")) do
         local g, label, zones, pin = list[i], nil, nil, nil
@@ -567,7 +643,7 @@ local function AddGathering(itemID)
         local tip = { label .. (g.p and (" - " .. g.p) or ""),
             #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded",
             ("%.2f%% over %d times gathered"):format(g.chance, g.k) }
-        if g.own > 0 then tip[#tip + 1] = ("%d of those are your own"):format(g.own) end
+        tip[#tip + 1] = g.own > 0 and ("%d of those are your own"):format(g.own) or "All counted by other players"
         -- the profession sits in the level column, so names keep their room
         rows[#rows + 1] = { cells = { label, g.p and (GREY .. g.p .. "|r") or "", ZoneCell(zones), ("%s%.2f%%|r"):format(GOLD, g.chance),
             ("%s(%d)|r"):format(GREY, g.k) }, tip = tip, pin = pin }
@@ -869,7 +945,7 @@ local function AddLearn(recipeID, rec)
         AddText("Drops from creatures (none recorded yet)")
         shown = true
     end
-    if AddObjects(qs, "Found in", "objects") then
+    if AddObjects(info.teach, qs, "Found in", "objects") then
         shown = true
     elseif how:find("w") then
         AddText("Found in a world object")
@@ -1069,7 +1145,7 @@ function DrawDetail(keep)
         any = AddVendors(currentItem, qs, "Sold by %d vendor%s") or any
         any = AddDrops(currentItem, qs, "Drops from %d creature%s", "reagentDrops") or any
         any = AddGathering(currentItem) or any
-        any = AddObjects(qs, "Looted from", "reagentObjects") or any
+        any = AddObjects(currentItem, qs, "Looted from", "reagentObjects") or any
         local seen = {}
         for _, l in ipairs(CS:SourceLines(currentItem, 50)) do
             seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }

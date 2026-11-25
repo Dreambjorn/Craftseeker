@@ -118,7 +118,8 @@ local function QuestForMe(id)
 end
 
 -- Where an item comes from, per QuestieDB; nil when QuestieDB is missing or knows nothing.
--- drops and vendors: { npc, name, level, rank, zones }; objects: { name, zones }; quests: { name, level, zone }
+-- drops and vendors: { npc, name, level, rank, zones }; objects: { name, zones }; quests: { name, level, zone };
+-- containers: { id } of the items that hold it when opened
 local function Lookup(self, itemID)
     if not ItemDB.Exists(itemID) then return nil end
     local out = {
@@ -126,7 +127,9 @@ local function Lookup(self, itemID)
         vendors = NpcEntries(ItemDB.Get(itemID, "vendors"), true),
         objects = {},
         quests = {},
+        containers = {},
     }
+    for _, id in ipairs(ItemDB.Get(itemID, "itemDrops") or {}) do out.containers[#out.containers + 1] = { id = id } end
     for _, id in ipairs(ItemDB.Get(itemID, "objectDrops") or {}) do
         local name = ObjectDB.Get(id, "name")
         if name then
@@ -150,7 +153,7 @@ local function Lookup(self, itemID)
                 pin = giver and giver.pin }
         end
     end
-    if #out.drops + #out.vendors + #out.objects + #out.quests == 0 then return nil end
+    if #out.drops + #out.vendors + #out.objects + #out.quests + #out.containers == 0 then return nil end
     return out
 end
 
@@ -179,7 +182,7 @@ local function BuiltinLookup(itemID)
     local src = CS.BUILTIN_ITEM_SOURCES and CS.BUILTIN_ITEM_SOURCES[itemID]
     if not src then return nil end
     local mine = MySide()
-    local out = { drops = {}, vendors = {}, objects = {}, quests = {} }
+    local out = { drops = {}, vendors = {}, objects = {}, quests = {}, containers = {} }
     for _, id in ipairs(src[1]) do out.drops[#out.drops + 1] = BuiltinNpc(id) end
     for _, id in ipairs(src[2]) do
         local e = BuiltinNpc(id)
@@ -200,6 +203,7 @@ local function BuiltinLookup(itemID)
                 zone = giver and giver.zones[1] or MapName(q[3]), pin = giver and giver.pin }
         end
     end
+    for _, id in ipairs(src[5] or {}) do out.containers[#out.containers + 1] = { id = id } end
     return out
 end
 
@@ -223,6 +227,11 @@ local function Merge(a, b)
     for _, q in ipairs(b.quests) do
         if not quests[q.name] then a.quests[#a.quests + 1] = q end
     end
+    local containers = {}
+    for _, c in ipairs(a.containers) do containers[c.id] = true end
+    for _, c in ipairs(b.containers) do
+        if not containers[c.id] then a.containers[#a.containers + 1] = c end
+    end
     return a
 end
 
@@ -240,7 +249,7 @@ function CS:GetItemSources(itemID)
     local hit = cache[itemID]
     if hit == nil then
         hit = Merge(BuiltinLookup(itemID), questie and Lookup(self, itemID) or nil)
-        if hit and #hit.drops + #hit.vendors + #hit.objects + #hit.quests == 0 then hit = nil end
+        if hit and #hit.drops + #hit.vendors + #hit.objects + #hit.quests + #hit.containers == 0 then hit = nil end
         cache[itemID] = hit or false
     end
     return hit or nil
