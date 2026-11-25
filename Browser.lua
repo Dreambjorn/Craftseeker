@@ -597,9 +597,9 @@ local function AddObjects(itemID, qs, heading, key)
     AddHeading(heading, "lootall")
     local rows = {}
     for i = 1, math.min(#list, TableLimit(key)) do
-        local e, how, zones, tip = list[i], "", nil, nil
+        local e, zones, tip = list[i], nil, nil
         if e.kind == "c" then
-            how, tip = GREY .. "Opened|r", { e.name, "Opened from the bags" }
+            tip = { e.name, "Opened from the bags" }
         else
             zones = e.zones
             tip = { e.name, #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded" }
@@ -610,7 +610,7 @@ local function AddObjects(itemID, qs, heading, key)
         elseif e.chance then
             tip[#tip + 1] = "All counted by other players"
         end
-        rows[#rows + 1] = { cells = { e.name, how, zones and ZoneCell(zones) or "",
+        rows[#rows + 1] = { cells = { e.name, "", zones and ZoneCell(zones) or "",
             e.chance and ("%s%.2f%%|r"):format(GOLD, e.chance) or (GREY .. "no data|r"),
             e.chance and ("%s(%d)|r"):format(GREY, e.k) or "" }, tip = tip, pin = e.pin }
     end
