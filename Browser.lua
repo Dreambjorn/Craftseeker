@@ -425,10 +425,16 @@ local groupNeed, groupDrawn, needGrew = {}, {}, false
 
 -- header: column titles or nil; rows: { cells = { text, ... }, tip = { line, ... }, pin }; justify: per column.
 -- Long tables show their first rows and grow TABLE_MORE at a time, so a reagent dropped by hundreds of creatures
--- never builds hundreds of row frames at once; key names the table for its buttons.
+-- never builds hundreds of row frames at once; key names the table for its buttons. total, when given, counts rows
+-- the caller left unbuilt past TableLimit(key).
 local TABLE_MORE = 50
-local function AddTable(header, rows, justify, key, group)
-    local shown = math.min(#rows, expanded[key] or TABLE_ROWS)
+local function TableLimit(key)
+    return expanded[key] or TABLE_ROWS
+end
+
+local function AddTable(header, rows, justify, key, group, total)
+    total = total or #rows
+    local shown = math.min(#rows, TableLimit(key))
     local need = {}
     local function Measure(cells, font)
         for i = 1, #cells do need[i] = math.max(need[i] or 0, math.ceil(TextWidth(cells[i], font)) + 13) end
@@ -464,10 +470,10 @@ local function AddTable(header, rows, justify, key, group)
         end
         AddRow(Columns(r.cells), r.tip, nil, click)
     end
-    local left = #rows - shown
+    local left = total - shown
     if left > 0 then
         local more = math.min(left, TABLE_MORE)
-        AddRow({ { GOLD .. ("Show %d more|r%s"):format(more, GREY .. ", " .. #rows .. " total|r"), DETAIL_W } }, nil, nil,
+        AddRow({ { GOLD .. ("Show %d more|r%s"):format(more, GREY .. ", " .. total .. " total|r"), DETAIL_W } }, nil, nil,
             function()
                 expanded[key] = shown + more
                 ShowDetail(true)
@@ -479,7 +485,7 @@ local function AddTable(header, rows, justify, key, group)
             ShowDetail(true)
         end)
     end
-    if #rows > TABLE_ROWS then cursor = cursor - 10 end -- keeps the buttons apart from the next heading
+    if total > TABLE_ROWS then cursor = cursor - 10 end -- keeps the buttons apart from the next heading
 end
 
 local function AddSlot(itemID, spellID, label)
@@ -544,8 +550,8 @@ local function AddGathering(itemID)
     local list = CS:GetGatherRates(itemID)
     if not list then return false end
     local rows = {}
-    for _, g in ipairs(list) do
-        local label, zones, pin
+    for i = 1, math.min(#list, TableLimit("gathering")) do
+        local g, label, zones, pin = list[i], nil, nil, nil
         if g.kind == "k" then
             label = CS:NpcName(g.id) or CS:SeenNpcName(g.id) or ("NPC " .. g.id)
             local entry = { zones = CS:GetPlaces(g.id), npc = g.id }
@@ -566,8 +572,8 @@ local function AddGathering(itemID)
         rows[#rows + 1] = { cells = { label, g.p and (GREY .. g.p .. "|r") or "", ZoneCell(zones), ("%s%.2f%%|r"):format(GOLD, g.chance),
             ("%s(%d)|r"):format(GREY, g.k) }, tip = tip, pin = pin }
     end
-    AddHeading(("Gathered from %d source%s"):format(#rows, #rows == 1 and "" or "s"), "mine")
-    AddTable({ "Source", "How", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources")
+    AddHeading(("Gathered from %d source%s"):format(#list, #list == 1 and "" or "s"), "mine")
+    AddTable({ "Source", "How", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources", #list)
     return true
 end
 
@@ -594,11 +600,6 @@ local function AddDrops(itemID, qs, heading, key)
     for _, e in ipairs(list) do
         if #e.zones == 0 then e.zones = CS:GetPlaces(e.npc) end
         if #e.zones == 0 then e.zones = CS:NpcZones(e.npc) or {} end
-        if not e.level then
-            local level, rank = CS:NpcLevel(e.npc)
-            e.level, e.rank = level, e.rank or rank
-        end
-        FillSeen(e, e.npc)
     end
     local here = GetRealZoneText()
     table.sort(list, function(a, b)
@@ -608,8 +609,15 @@ local function AddDrops(itemID, qs, heading, key)
         return a.name < b.name
     end)
     AddHeading((heading or "Recipe dropped by %d creature%s"):format(#list, #list == 1 and "" or "s"), "attack")
+    -- rows past the table's fold aren't built: a reagent can drop from hundreds of creatures, redrawn on every loot
     local rows = {}
-    for _, e in ipairs(list) do
+    for i = 1, math.min(#list, TableLimit(key or "drops")) do
+        local e = list[i]
+        if not e.level then
+            local level, rank = CS:NpcLevel(e.npc)
+            e.level, e.rank = level, e.rank or rank
+        end
+        FillSeen(e, e.npc)
         local name = e.rank and (e.name .. GOLD .. " " .. e.rank .. "|r") or e.name
         -- rate and corpse count in their own right-aligned columns, so digits and % signs line up
         local chance = e.chance and ("%s%.2f%%|r"):format(GOLD, e.chance) or (GREY .. "no data|r")
@@ -623,7 +631,7 @@ local function AddDrops(itemID, qs, heading, key)
         if e.own and e.own > 0 then tip[#tip + 1] = ("%d of those corpses are your own"):format(e.own) end
         rows[#rows + 1] = { cells = { name, e.level and tostring(e.level) or "", ZoneCell(e.zones), chance, corpses }, tip = tip, pin = e.pin }
     end
-    AddTable({ "Creature", "Level", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, key or "drops", "sources")
+    AddTable({ "Creature", "Level", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, key or "drops", "sources", #list)
     return true
 end
 
