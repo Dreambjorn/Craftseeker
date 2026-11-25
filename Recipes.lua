@@ -21,19 +21,29 @@ local function AddIndex(index, key, recipeID)
 end
 
 function CS:IndexRecipe(recipeID, rec)
-    for _, r in ipairs(rec.r or {}) do
-        AddIndex(self.usedIn, r[1], recipeID)
+    -- a built-in record indexes from its flat list, so its reagent tables are only made when something reads them
+    local flat = rawget(rec, "rl")
+    if flat then
+        for i = 1, #flat, 2 do AddIndex(self.usedIn, flat[i], recipeID) end
+    else
+        for _, r in ipairs(rec.r or {}) do AddIndex(self.usedIn, r[1], recipeID) end
     end
     if rec.o then
         AddIndex(self.madeBy, rec.o, recipeID)
     end
 end
 
-local function Decode(d)
-    local r = {}
-    local list = d[5]
+-- Built-in records decode their reagents ({ { itemID, qty }, ... }) on first use; most are never shown in a session
+local LAZY = { __index = function(rec, key)
+    if key ~= "r" then return nil end
+    local r, list = {}, rawget(rec, "rl")
     for i = 1, #list, 2 do r[#r + 1] = { list[i], list[i + 1] } end
-    return { n = d[1], p = d[2], o = d[3], q = d[4], r = r }
+    rawset(rec, "r", r)
+    return r
+end }
+
+local function Decode(d)
+    return setmetatable({ n = d[1], p = d[2], o = d[3], q = d[4], rl = d[5] }, LAZY)
 end
 
 function CS:RebuildIndex()
