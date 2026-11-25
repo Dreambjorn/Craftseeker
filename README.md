@@ -67,6 +67,12 @@ Craftseeker works on its own. With [QuestieDB](https://github.com/Questie/Questi
 
 <br>
 
+**Q: Why is a recipe I found missing?**
+
+**A:** It is hidden until someone has seen it in the game. It shows once you learn it, a trainer offers it, or its recipe item is sold, looted or given as a quest reward. A recipe two other Craftseeker users found shows for you too; it takes two, so one player can't make up recipes for everyone. Tick "Show unconfirmed recipes" in the settings to list the hidden ones in grey.
+
+<br>
+
 **Q: How do I know which recipes I already know?**
 
 **A:** Recipes you know get a check mark, read from your spellbook at login. A blue name means one of your alts knows it — hover it to see who.

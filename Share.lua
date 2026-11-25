@@ -7,6 +7,7 @@ local VERSION = "1"
 local CHUNK = 200          -- addon messages carry 255 bytes; the rest is the header
 local HELLO_EVERY = 900    -- announce our counts this often
 local MAX_OPENED = 300     -- one install never outweighs everyone else
+local MAX_PROVEN = 1000    -- proven recipes one install sends or we keep
 local MAX_FRIENDS = 10
 local CHANNEL = "CraftseekerShare"
 local REPLIES = 6          -- data replies per REPLY_WINDOW seconds, however many ask
@@ -150,6 +151,15 @@ function Share:Serialize()
         for item in pairs(q.i) do fields[#fields + 1] = item end
         Add(fields)
     end
+    -- recipes our game proved that the built-in data hides or lacks, as "pr,<recipe>,..." (older versions skip it)
+    local proven = {}
+    for id in pairs(CS.data.proven) do
+        if CS:NeedsProof(id) then proven[#proven + 1] = id end
+    end
+    table.sort(proven)
+    for i = 1, math.min(#proven, MAX_PROVEN), 40 do
+        Add({ "pr", table.concat(proven, ",", i, math.min(i + 39, #proven, MAX_PROVEN)) })
+    end
     -- creatures as "n<npc>,name,lo,hi,@map:x:y,zone:times,..."
     for npc, e in pairs(CS.data.npcs) do
         local fields = { "n" .. npc, Escape(e.n or ""), e.lo or 0, e.hi or 0,
@@ -166,8 +176,17 @@ end
 -- corpses each, prices below 10,000 gold
 function Share.Parse(text)
     local counts, prices, objects, objectPins, npcs, gather, quests = {}, {}, {}, {}, {}, { k = {}, g = {} }, {}
+    local proven, nProven = {}, 0
     for entry in text:gmatch("[^;]+") do
         local fields = { strsplit(",", entry) }
+        if fields[1] == "pr" then
+            for i = 2, #fields do
+                local id = tonumber(fields[i])
+                if id and id > 0 and id < 2 ^ 31 and id == math.floor(id) and nProven < MAX_PROVEN and not proven[id] then
+                    proven[id], nProven = true, nProven + 1
+                end
+            end
+        end
         local gkind, gid = fields[1]:match("^([kg])(%d+)$")
         local times = tonumber(fields[3])
         gid = tonumber(gid)
@@ -233,7 +252,7 @@ function Share.Parse(text)
             counts[npc] = c
         end
     end
-    return counts, prices, objects, objectPins, npcs, gather, quests
+    return counts, prices, objects, objectPins, npcs, gather, quests, proven
 end
 
 -- Keeps the newest MAX_PEERS installs and drops those not heard from in a month
@@ -429,9 +448,9 @@ function Share:OnMessage(msg, chatType, sender, bnAccount)
             end
             Tally(heard.data, chatType)
             CS:Debug("counts received from %s (%s, install %s)", tostring(sender or bnAccount), chatType, install)
-            local counts, prices, objects, objectPins, npcs, gather, quests = Share.Parse(text)
+            local counts, prices, objects, objectPins, npcs, gather, quests, proven = Share.Parse(text)
             shared[install] = { stamp = stamp, from = sender, at = time(), counts = counts, prices = prices,
-                objects = objects, objectPins = objectPins, npcs = npcs, gather = gather, quests = quests }
+                objects = objects, objectPins = objectPins, npcs = npcs, gather = gather, quests = quests, proven = proven }
             Share.Trim()
             CS:CountsChanged()
         end

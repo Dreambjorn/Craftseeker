@@ -102,9 +102,9 @@ function CS:NeedsProof(recipeID)
     return not (self.BUILTIN and self.BUILTIN[recipeID]) or (self.BUILTIN_UNCONFIRMED and self.BUILTIN_UNCONFIRMED[recipeID]) == true
 end
 
--- On Forever for sure: built-in data players saw it in, or our game showed it
+-- On Forever for sure: built-in data players saw it in, our game showed it, or two other players' games did
 function CS:IsProven(recipeID)
-    return not self:NeedsProof(recipeID) or self.data.proven[recipeID]
+    return not self:NeedsProof(recipeID) or self.data.proven[recipeID] or self:SharedProof(recipeID)
         or self:WhoKnows(recipeID) ~= nil
 end
 
@@ -122,6 +122,24 @@ end
 -- A recipe item for sale, looted or offered proves the recipes it teaches
 function CS:ProveItem(itemID)
     for _, recipeID in ipairs(self.recipeItems[itemID] or {}) do self:Prove(recipeID) end
+end
+
+-- Recipes other Craftseeker users proved, counted by sender so one player's made-up installs unhide nothing
+local sharedProof, sharedProofFor
+function CS:SharedProof(recipeID)
+    if sharedProofFor ~= (self.othersVersion or 0) or not sharedProof then
+        sharedProofFor, sharedProof = self.othersVersion or 0, {}
+        local senders = {}
+        for install, peer in pairs(self.data.shared) do
+            local who = peer.from or install
+            for id in pairs(peer.proven or {}) do
+                senders[id] = senders[id] or {}
+                senders[id][who] = true
+                if next(senders[id], next(senders[id])) then sharedProof[id] = true end
+            end
+        end
+    end
+    return sharedProof[recipeID] == true
 end
 
 function CS:CountRecipes()
