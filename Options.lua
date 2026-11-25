@@ -58,6 +58,13 @@ function Options:BuildSettings()
             data.settings.opposite = value
             self:SendMessage("CRAFTSEEKER_FILTER")
         end, false)
+    AddCheckbox(category, "unconfirmed", "Show unconfirmed recipes",
+        "Also lists, in grey, recipes no player has seen on WoW: Forever yet. They may not be in the game. One shows normally once you, or two other Craftseeker users, find it in play.",
+        function() return data.settings.unconfirmed end,
+        function(value)
+            data.settings.unconfirmed = value
+            self:SendMessage("CRAFTSEEKER_FILTER")
+        end, false)
     AddCheckbox(category, "debug", "Show debug messages",
         "Prints what sharing does (channel test, data received and sent, failed whispers).",
         function() return data.settings.debug end,

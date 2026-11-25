@@ -96,9 +96,26 @@ function CS:SetRecipe(recipeID, rec)
     self:IndexRecipe(recipeID, rec)
 end
 
--- On Forever for sure: in the built-in data (every entry has proof), or a character has learned it
+-- Built in without player proof, or not built in at all: hidden until the game shows it exists
+function CS:NeedsProof(recipeID)
+    return not (self.BUILTIN and self.BUILTIN[recipeID]) or (self.BUILTIN_UNCONFIRMED and self.BUILTIN_UNCONFIRMED[recipeID]) == true
+end
+
+-- On Forever for sure: built-in data players saw it in, or our game showed it
 function CS:IsProven(recipeID)
-    return (self.BUILTIN and self.BUILTIN[recipeID]) or self.data.proven[recipeID] or self:WhoKnows(recipeID) ~= nil
+    return not self:NeedsProof(recipeID) or self.data.proven[recipeID]
+        or self:WhoKnows(recipeID) ~= nil
+end
+
+-- The game showed a recipe exists here (window, spellbook, trainer, vendor, loot, quest reward); a hidden one is news
+-- for other Craftseeker users
+function CS:Prove(recipeID)
+    if self.data.proven[recipeID] then return end
+    self.data.proven[recipeID] = true
+    if self:NeedsProof(recipeID) then
+        self.data.countsStamp = time()
+        self:CountsChanged(true)
+    end
 end
 
 function CS:CountRecipes()
@@ -631,10 +648,13 @@ function CS:AltsKnowing(recipeID)
     return out
 end
 
--- Listed when this character knows it or can get it, and its profession isn't hidden in the settings
+-- Listed when this character knows it or can get it, and its profession isn't hidden in the settings; a recipe not
+-- seen on Forever yet only with "Show unconfirmed recipes" on or as a favourite
 function CS:Shown(recipeID, who)
     local rec = self.recipes[recipeID]
-    if not rec or self.data.settings.hidden[rec.p or "?"] or not self:IsProven(recipeID) then return false end
+    local settings = self.data.settings
+    if not rec or settings.hidden[rec.p or "?"] then return false end
+    if not (settings.unconfirmed or self:IsFavorite(recipeID) or self:IsProven(recipeID)) then return false end
     return (who or self:WhoKnows(recipeID)) == "me" or self.data.settings.opposite or self:IsObtainable(recipeID)
 end
 

@@ -22,8 +22,10 @@ local defaults = {
         skills = {},               -- [character] = { [profession] = rank }
         items = {},                -- [character] = { bags = { [itemID] = n }, bank = { [itemID] = n } }
         bridges = { dt = {}, fd = {}, dtSkins = {} },  -- other loot addons' counts: dt, dtSkins [npc][install], fd [player id]
-        -- hidden: [profession] = true; dt, fd: read those addons' counts; opposite: list the other faction's recipes
-        settings = { share = true, hidden = {}, dt = true, fd = true, opposite = false, filters = {}, tooltip = true, debug = false },
+        -- hidden: [profession] = true; dt, fd: read those addons' counts; opposite: list the other faction's recipes;
+        -- unconfirmed: list recipes no player has seen on Forever yet
+        settings = { share = true, hidden = {}, dt = true, fd = true, opposite = false, unconfirmed = false, filters = {},
+            tooltip = true, debug = false },
         minimap = { hide = false },  -- LibDBIcon's button position and visibility
     },
 }
@@ -108,14 +110,19 @@ function CS:SlashCommand(input)
         local peers = 0
         for _ in pairs(data.shared) do peers = peers + 1 end
         local dt, fd = self:GetModule("Listener"):Stats()
-        self:Print(self:CountRecipes() .. " recipes, " .. reagents .. " reagents, sources for " .. srcs .. " items, "
+        local unseen = 0
+        for id in pairs(self.recipes) do
+            if not self:IsProven(id) then unseen = unseen + 1 end
+        end
+        self:Print(self:CountRecipes() .. " recipes, " .. unseen .. " more not seen on Forever yet, " .. reagents
+            .. " reagents, sources for " .. srcs .. " items, "
             .. "loot counts from " .. peers .. " other Craftseeker user" .. (peers == 1 and "" or "s")
             .. ", " .. dt .. " Drop Tables and " .. fd .. " Forever Drops users")
         for p, n in pairs(profs) do
             print("  " .. p .. ": " .. n)
         end
     elseif cmd == "reset" then
-        wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared); wipe(data.prices); wipe(data.objects); wipe(data.objectPins); wipe(data.npcs); wipe(data.gather.k); wipe(data.gather.g); wipe(data.quests)
+        wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared); wipe(data.prices); wipe(data.objects); wipe(data.objectPins); wipe(data.npcs); wipe(data.gather.k); wipe(data.gather.g); wipe(data.quests); wipe(data.proven)
         wipe(data.bridges.dt); wipe(data.bridges.fd); wipe(data.bridges.dtSkins)
         self:CountsChanged()
         self:KnownChanged()

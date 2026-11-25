@@ -75,7 +75,7 @@ function Scanner:Scan()
             CS:SetRecipe(recipeID, rec)
         end
         -- a window lists other seasons' recipes too; one somebody has learned is proof it exists here
-        if info and info.learned then data.proven[recipeID] = true end
+        if info and info.learned then CS:Prove(recipeID) end
         if ownWindow and info then
             known[recipeID] = info.learned and true or nil
             if not info.learned then unlearned = true end
@@ -136,7 +136,7 @@ function Scanner:ReadSpellbook()
             local ok, has = pcall(C_SpellBook.IsSpellKnown, recipeID)
             if ok and has == true then
                 known[recipeID] = true
-                CS.data.proven[recipeID] = true
+                CS:Prove(recipeID)
                 added = added + 1
             end
         end

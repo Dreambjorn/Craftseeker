@@ -13,13 +13,14 @@ CS.DIFFICULTY_COLOR = { learn = "|cffff4040", orange = "|cffff8040", yellow = "|
 CS.SKILL_ATLAS = { orange = "Professions-Icon-Skill-High", yellow = "Professions-Icon-Skill-Medium",
     green = "Professions-Icon-Skill-Low" }
 
--- Profession, the name (blue when only an alt knows it, red while the skill is too low), a check when this
--- character knows it, and the skill-up arrow
+-- Profession, the name (blue when only an alt knows it, red while the skill is too low, grey when not seen on Forever
+-- yet), a check when this character knows it, and the skill-up arrow
 function CS:RecipeLine(recipeID, reagentID)
     local rec = self.recipes[recipeID]
     local who = self:WhoKnows(recipeID)
     local diff = self:Difficulty(recipeID)
-    local color = who == "alt" and ALT or diff == "learn" and self.DIFFICULTY_COLOR.learn or "|cffffffff"
+    local color = not self:IsProven(recipeID) and GREY or who == "alt" and ALT
+        or diff == "learn" and self.DIFFICULTY_COLOR.learn or "|cffffffff"
     local _, optional = self.ReagentQty(rec, reagentID)
     local text = color .. (rec.n or "?") .. "|r"
     if optional then text = text .. GREY .. " (optional)|r" end

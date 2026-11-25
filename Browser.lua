@@ -46,6 +46,9 @@ local function ShowItemTooltip(self)
         if CS:WhoKnows(self.recipeID) ~= "me" and not CS:IsObtainable(self.recipeID) then
             GameTooltip:AddLine("Only the opposite faction can learn this", 1, 0.25, 0.25)
         end
+        if not CS:IsProven(self.recipeID) then
+            GameTooltip:AddLine("Not seen on WoW: Forever yet; it may not be in the game", 0.6, 0.6, 0.6, true)
+        end
     elseif self.itemID then
         local have, _, bank = CS:ItemCounts(self.itemID)
         if bank > 0 then
@@ -1012,7 +1015,9 @@ function DrawDetail(keep)
     local who, alt = CS:WhoKnows(selectedRecipe)
     detail.Sub:SetText((rec.p or "?") .. "   " .. (CS.BUILTIN_CLASS and CS.BUILTIN_CLASS[selectedRecipe] and "class spell"
         or who == "me" and "|cff40ff40You know this|r"
-        or who == "alt" and (GOLD .. "Known by " .. alt .. "|r") or (GREY .. "None of your characters know this|r")))
+        or who == "alt" and (GOLD .. "Known by " .. alt .. "|r")
+        or not CS:IsProven(selectedRecipe) and (GREY .. "Not seen on WoW: Forever yet|r")
+        or (GREY .. "None of your characters know this|r")))
     cursor = -6 - SLOT
 
     AddSection("Reagents")
