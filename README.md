@@ -21,7 +21,7 @@ What it shows:
 
 ---
 
-The start page lists the reagents in your bags and bank. Search for any reagent, recipe or crafted item, and narrow every list with the Filter button: your professions only, recipes with a skill-up, recipes you don't know yet, or recipes you have the materials for. Favorite a recipe to keep it at the top, or track it in the objective tracker.
+The start page lists your favorite and tracked recipes, then the reagents in your bags and, apart, those only in your bank. Search for any reagent, recipe or crafted item, and narrow every list with the Filter button: your professions only, recipes with a skill-up, recipes you don't know yet, recipes you have the materials for, and by source or equipment slot. Recipes are grouped in the profession window's categories. Favorite a recipe to keep it at the top, or track it in the objective tracker.
 
 <img width="1041" height="781" alt="image" src="https://github.com/user-attachments/assets/bddf3152-b3a0-4453-8c48-45ad25e8186d" />
 
