@@ -59,7 +59,7 @@ function Options:BuildSettings()
             self:SendMessage("CRAFTSEEKER_FILTER")
         end, false)
     AddCheckbox(category, "debug", "Show debug messages",
-        "Prints what sharing does (channel test, data received and sent, failed whispers) and names the addon behind the game's red \"doing that too fast\" errors.",
+        "Prints what sharing does (channel test, data received and sent, failed whispers).",
         function() return data.settings.debug end,
         function(value) data.settings.debug = value end, false)
     -- pages to leave out professions and classes none of the characters will learn; poisons are the rogue's
