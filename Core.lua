@@ -83,7 +83,6 @@ function CS:SlashCommand(input)
         print("  /cs minimap  - show or hide the minimap button")
         print("  /cs stats  - what's been learned so far")
         print("  /cs status  - whether sharing reaches other players this session")
-        print("  /cs hello  - announce yourself to other Craftseeker users now")
         print("  /cs reset  - wipe all learned data")
         print("  Alt+Click an item in your bags to look it up.")
     elseif cmd == "share" then
@@ -97,9 +96,6 @@ function CS:SlashCommand(input)
     elseif cmd == "status" then
         -- is sharing reaching anyone: the channel's self-test and what came and went this session
         for _, line in ipairs(self:GetModule("Share"):Status()) do print("  " .. line) end
-    elseif cmd == "hello" then
-        self:GetModule("Share"):Hello()
-        self:Print("hello sent to your guild, group, friends and the Craftseeker channel; /cs status shows who answers")
     elseif cmd == "stats" then
         local profs = {}
         for _, rec in pairs(self.recipes) do

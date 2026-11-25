@@ -49,7 +49,6 @@ Craftseeker works on its own. With [QuestieDB](https://github.com/Questie/Questi
 - ` /cs minimap ` — Show / hide the minimap button
 - ` /cs share ` — Turn sharing with other Craftseeker users on / off
 - ` /cs status ` — Check whether sharing reaches other players
-- ` /cs hello ` — Announce yourself to other Craftseeker users now
 - ` /cs stats ` — What's been learned so far
 - ` /cs reset ` — Wipe all learned data
 ---
