@@ -599,7 +599,7 @@ local function AddObjects(itemID, qs, heading, key)
     for i = 1, math.min(#list, TableLimit(key)) do
         local e, zones, tip = list[i], nil, nil
         if e.kind == "c" then
-            tip = { e.name, "An item that holds it when opened" }
+            tip = { e.name, "Can contain " .. (CS:ItemName(itemID) or "this item") }
         else
             zones = e.zones
             tip = { e.name, #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded" }
