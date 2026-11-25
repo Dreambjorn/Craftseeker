@@ -70,7 +70,7 @@ local function Send(chatType, target, msg, prio, onSent)
     CS.Transmit(PREFIX, chatType, target, msg, prio, onSent)
 end
 
-local GATHER_PROFS = { Skinning = true, Mining = true, Herbalism = true, Chest = true }
+local GATHER_PROFS = { Skinning = true, Mining = true, Herbalism = true, Chest = true, Container = true }
 
 -- Zone names can hold the separators, so ",", ";", ":" and "%" travel as %XX
 local function Escape(text)
@@ -128,7 +128,8 @@ function Share:Serialize()
         end
     end
     for _, fields in pairs(byNpc) do Add(fields) end
-    -- gathering as "k<npc>,profession,times,,item:drops,..." (corpses) and "g<object>,profession,times,name,..." (nodes)
+    -- gathering as "k<npc>,profession,times,,item:drops,..." (corpses), "g<object>,profession,times,name,..." (nodes) and
+    -- "c<item>,Container,times,,..." (containers; older versions skip it)
     for kind, book in pairs(CS.data.gather) do
         for id, e in pairs(book) do
             if e.k > 0 and next(e.i) then
@@ -175,7 +176,7 @@ end
 -- Their counts and vendor prices back, checked: whole numbers only, drops never above corpses, at most MAX_OPENED
 -- corpses each, prices below 10,000 gold
 function Share.Parse(text)
-    local counts, prices, objects, objectPins, npcs, gather, quests = {}, {}, {}, {}, {}, { k = {}, g = {} }, {}
+    local counts, prices, objects, objectPins, npcs, gather, quests = {}, {}, {}, {}, {}, { k = {}, g = {}, c = {} }, {}
     local proven, nProven = {}, 0
     for entry in text:gmatch("[^;]+") do
         local fields = { strsplit(",", entry) }
@@ -187,7 +188,7 @@ function Share.Parse(text)
                 end
             end
         end
-        local gkind, gid = fields[1]:match("^([kg])(%d+)$")
+        local gkind, gid = fields[1]:match("^([kgc])(%d+)$")
         local times = tonumber(fields[3])
         gid = tonumber(gid)
         if gkind and gid and GATHER_PROFS[fields[2]] and times and times > 0 and times == math.floor(times) then

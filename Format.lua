@@ -74,7 +74,12 @@ function CS:SourceLines(itemID, limit)
             end
         end
         if s.container then
-            lines[#lines + 1] = { "Looted", "From containers" }
+            -- records before the container's name was kept say only "Container"
+            for _, t in ipairs(TopEntries(s.container, limit, function(k, v)
+                return (k == "Container" and "A container" or k) .. GREY .. " (" .. v .. "x)|r"
+            end)) do
+                lines[#lines + 1] = { "Opened", t }
+            end
         end
     end
     return lines

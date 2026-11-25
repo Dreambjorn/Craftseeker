@@ -154,6 +154,12 @@ function Recorder:MERCHANT_SHOW()
     end
 end
 
+-- The bag item a loot window was opened from (a clam, a lockbox); it is still in the bags while its loot shows
+local function ContainerID(guid)
+    local ok, id = pcall(C_Item.GetItemIDByGUID, guid)
+    return ok and type(id) == "number" and not CS.IsSecret(id) and id or nil
+end
+
 local function RecordSource(itemID, guid, gathering)
     if not guid or CS.IsSecret(guid) then return end
     local kind = guid:match("^(%a+)")
@@ -171,7 +177,8 @@ local function RecordSource(itemID, guid, gathering)
         local how = lastCast and GetTime() - lastCast.t < 8 and lastCast.target or "Node/object"
         Bump(Bucket(itemID, "gather"), how .. " (" .. Zone() .. ")")
     elseif kind == "Item" then
-        Bump(Bucket(itemID, "container"), "Container")
+        local id = ContainerID(guid)
+        Bump(Bucket(itemID, "container"), id and CS:ItemName(id) or "Container")
     end
 end
 
@@ -212,7 +219,7 @@ local function CountCorpse(opened, guid, itemID)
 end
 
 -- Gathering counts, kept apart from creature drops: "k" a corpse skinned (or mined, herb-gathered) by creature,
--- "g" a node or chest by object
+-- "g" a node or chest by object, "c" a container opened from the bags by item
 local function Gather(kind, id, prof, name, items)
     local e = CS.data.gather[kind][id]
     if not e then
@@ -260,7 +267,7 @@ function Recorder:LOOT_READY()
             local guid = src[i]
             if guid and not CS.IsSecret(guid) and not fishing then
                 local object = guid:match("^GameObject") ~= nil
-                if gathering or object then
+                if gathering or object or guid:match("^Item") then
                     gathered[guid] = gathered[guid] or {}
                     if counted then gathered[guid][counted] = true end
                     if object and counted and not placed[guid] then
@@ -282,7 +289,11 @@ function Recorder:LOOT_READY()
     end
     local node = lastCast and now - lastCast.t < 8 and lastCast.target or nil
     for guid, items in pairs(gathered) do
-        if not looted["g" .. guid] then
+        -- a stack of containers shares one GUID, so each opening counts; loot left in one and reopened counts twice
+        local container = guid:match("^Item") and ContainerID(guid)
+        if container then
+            Gather("c", container, "Container", nil, items)
+        elseif not guid:match("^Item") and not looted["g" .. guid] then
             looted["g" .. guid] = now
             local id = tonumber((select(6, strsplit("-", guid))))
             if id and guid:match("^GameObject") then
