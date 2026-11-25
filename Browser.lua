@@ -1334,9 +1334,11 @@ local function PickerView(hits, uses, recipes, query)
 end
 
 -- Recipes in one section per profession, in the order given; reagentID tags optional reagents
+local viewRecipes = {} -- every recipe the view holds, filtered out or folded away too: bag changes redraw for these
 function ProfessionSections(ids, reagentID)
     local list, first = {}, nil
     local byProf, profs = {}, {}
+    for _, id in ipairs(ids or {}) do viewRecipes[id] = true end
     if ids and CS:AnyFilter() then
         local kept = {}
         for _, recipeID in ipairs(ids) do
@@ -1452,6 +1454,7 @@ end
 
 local function BuildView(query)
     currentItem, madeView, picking, homeKeep = nil, false, false, false
+    wipe(viewRecipes)
     if query == "" then return WelcomeView() end
     local made = tonumber(query:match("^made:(%d+)$"))
     if made then return MadeView(made) end
@@ -1504,13 +1507,27 @@ function Browser:ItemInfoReceived(arrived)
     if redraw and f and f:IsShown() and currentQuery ~= "" then Render(true) end
 end
 
--- New bag counts, skill ranks, drop counts or tracked recipes: redraw the recipe where the reader is
+-- Skill ranks, drop counts or tracked recipes: redraw where the reader is
 function Browser:ItemsChanged()
+    if f and f:IsShown() then Render(true) end
+end
+
+-- Reagent counts changed ({ [itemID] = true }, nil for everything): the list when a recipe it holds uses one, since it
+-- sorts craftable recipes first and the materials filter reads the bags; else the pane when its recipe does
+function Browser:BagsChanged(_, changed)
     if not (f and f:IsShown()) then return end
-    -- the start page lists the bags, so it redraws whole
-    if currentQuery == "" then
+    if not changed or currentQuery == "" then return Render(true) end
+    local list, pane = false, false
+    for itemID in pairs(changed) do
+        if itemID == currentItem then pane = true end
+        for _, id in ipairs(CS.usedIn[itemID] or {}) do
+            if viewRecipes[id] then list = true end
+            if id == selectedRecipe then pane = true end
+        end
+    end
+    if list then
         Render(true)
-    elseif selectedRecipe then
+    elseif pane then
         ShowDetail(true)
     end
 end
@@ -1548,7 +1565,7 @@ function Browser:OnEnable()
     if TooltipDataProcessor and Enum.TooltipDataType then
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, ReagentLine)
     end
-    self:RegisterMessage("CRAFTSEEKER_ITEMS", "ItemsChanged")
+    self:RegisterMessage("CRAFTSEEKER_ITEMS", "BagsChanged")
     self:RegisterMessage("CRAFTSEEKER_FILTER", "FilterChanged")
     self:RegisterEvent("TRACKED_RECIPE_UPDATE", "ItemsChanged")
     -- loot and shared counts come in bursts; one redraw every few seconds at most

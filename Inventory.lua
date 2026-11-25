@@ -44,19 +44,37 @@ local function BankFromCounts()
     return out
 end
 
+-- Marks in `into` every item whose count differs between two scans
+local function Diff(old, new, into)
+    for id, n in pairs(new) do
+        if old[id] ~= n then into[id] = true end
+    end
+    for id in pairs(old) do
+        if new[id] == nil then into[id] = true end
+    end
+end
+
+-- Only a change in reagent or recipe-item counts is news: moving items or looting other things redraws nothing
 function Inventory:Update()
-    local mine = Mine()
-    mine.bags = Scan(BAGS)
+    local mine, changed = Mine(), {}
+    local bags = Scan(BAGS)
+    Diff(mine.bags or {}, bags, changed)
+    mine.bags = bags
     -- the bank tabs fill in while the bank is open; otherwise item counts give it, every few minutes at most
+    local bank
     if bankOpen then
-        mine.bank = Scan(BANK)
+        bank = Scan(BANK)
     elseif not bankReadAt or GetTime() - bankReadAt > BANK_REREAD then
         bankReadAt = GetTime()
         -- counts not loaded yet read as an empty bank; keep the last known contents then
-        local bank = BankFromCounts()
-        if next(bank) or not next(mine.bank or {}) then mine.bank = bank end
+        bank = BankFromCounts()
+        if not next(bank) and next(mine.bank or {}) then bank = nil end
     end
-    self:SendMessage("CRAFTSEEKER_ITEMS")
+    if bank then
+        Diff(mine.bank or {}, bank, changed)
+        mine.bank = bank
+    end
+    if next(changed) then self:SendMessage("CRAFTSEEKER_ITEMS", changed) end
 end
 
 function Inventory:ReadBank()

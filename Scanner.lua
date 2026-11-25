@@ -112,8 +112,9 @@ function Scanner:ReadSkills(events)
     if learned or seen ~= skillsSeen then
         skillsSeen = seen
         self:ReadSpellbook()
+        -- skill colours and known marks changed: everything redraws
+        self:SendMessage("CRAFTSEEKER_ITEMS")
     end
-    self:SendMessage("CRAFTSEEKER_ITEMS")
 end
 
 -- Recipes are spells the character knows, so no profession window is needed to mark them. Only adds: a window scan
