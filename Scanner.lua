@@ -91,6 +91,7 @@ function Scanner:Scan()
     -- IndexRecipe only adds, so drop entries for reagents a recipe no longer uses
     if rebuild then CS:RebuildIndex() end
     CS:KnownChanged()
+    self:SendMessage("CRAFTSEEKER_RECIPES")
 end
 
 -- This character's professions and ranks, kept for the skill colours and for alts

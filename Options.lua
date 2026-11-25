@@ -63,33 +63,39 @@ function Options:BuildSettings()
         function() return data.settings.debug end,
         function(value) data.settings.debug = value end, false)
     -- pages to leave out professions and classes none of the characters will learn; poisons are the rogue's
-    local isClass = { Poisons = true }
+    self.pages = {
+        Professions = Settings.RegisterVerticalLayoutSubcategory(category, "Professions"),
+        Classes = Settings.RegisterVerticalLayoutSubcategory(category, "Classes"),
+    }
+    self.listed = {}
+    self:AddProfessions()
+    Settings.RegisterAddOnCategory(category)
+    self.categoryID = category:GetID()
+end
+
+-- A checkbox per profession or class with recipes, sorted at login; one a profession window brings later is added at
+-- the end (the settings panel reads a page's initializers each time it shows the page)
+function Options:AddProfessions()
+    local data, isClass, new = CS.data, { Poisons = true }, {}
     for id, rec in pairs(CS.recipes) do
         if rec.p and CS.BUILTIN_CLASS and CS.BUILTIN_CLASS[id] then isClass[rec.p] = true end
     end
-    local profs, classes, seen = {}, {}, {}
     for _, rec in pairs(CS.recipes) do
-        if rec.p and not seen[rec.p] then
-            seen[rec.p] = true
-            table.insert(isClass[rec.p] and classes or profs, rec.p)
+        if rec.p and not self.listed[rec.p] then
+            self.listed[rec.p] = true
+            new[#new + 1] = rec.p
         end
     end
-    local function AddPage(name, list, what)
-        local sub = Settings.RegisterVerticalLayoutSubcategory(category, name)
-        table.sort(list)
-        for _, p in ipairs(list) do
-            AddCheckbox(sub, "show_" .. (p:gsub("%W", "")), p, ("Lists %s %s. Untick it to hide them everywhere."):format(p, what),
-                function() return not data.settings.hidden[p] end,
-                function(value)
-                    data.settings.hidden[p] = not value or nil
-                    self:SendMessage("CRAFTSEEKER_FILTER")
-                end)
-        end
+    table.sort(new)
+    for _, p in ipairs(new) do
+        AddCheckbox(self.pages[isClass[p] and "Classes" or "Professions"], "show_" .. (p:gsub("%W", "")), p,
+            ("Lists %s %s. Untick it to hide them everywhere."):format(p, isClass[p] and "spells that use reagents" or "recipes"),
+            function() return not data.settings.hidden[p] end,
+            function(value)
+                data.settings.hidden[p] = not value or nil
+                self:SendMessage("CRAFTSEEKER_FILTER")
+            end)
     end
-    AddPage("Professions", profs, "recipes")
-    AddPage("Classes", classes, "spells that use reagents")
-    Settings.RegisterAddOnCategory(category)
-    self.categoryID = category:GetID()
 end
 
 -- Minimap button -----------------------------------------------------------------
@@ -120,4 +126,5 @@ end
 function Options:OnEnable()
     self:BuildMinimapButton()
     self:BuildSettings()
+    self:RegisterMessage("CRAFTSEEKER_RECIPES", "AddProfessions")
 end
