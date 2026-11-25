@@ -74,19 +74,19 @@ function Inventory:BANKFRAME_CLOSED()
     bankReadAt = GetTime()
 end
 
--- This character's count (bags and bank), and the alts that have some: { { name, count }, ... } most first
+-- This character's count (bags and bank), the alts that have some ({ { name, count }, ... } most first), and its bank count
 function CS:ItemCounts(itemID)
-    local me, have, alts = self.CharKey(), 0, {}
+    local me, have, alts, bank = self.CharKey(), 0, {}, 0
     for char, c in pairs(self.data.items) do
         local n = (c.bags[itemID] or 0) + (c.bank[itemID] or 0)
         if char == me then
-            have = n
+            have, bank = n, c.bank[itemID] or 0
         elseif n > 0 then
             alts[#alts + 1] = { char:match("^[^-]+") or char, n }
         end
     end
     table.sort(alts, function(a, b) return a[2] > b[2] end)
-    return have, alts
+    return have, alts, bank
 end
 
 function Inventory:OnEnable()
