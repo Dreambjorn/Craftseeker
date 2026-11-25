@@ -117,6 +117,7 @@ function CS:Prove(recipeID)
     if self:NeedsProof(recipeID) then
         self.data.countsStamp = time()
         self:CountsChanged(true)
+        AceEvent:SendMessage("CRAFTSEEKER_FILTER") -- the recipe may be listed now
     end
 end
 

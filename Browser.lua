@@ -1512,9 +1512,14 @@ function Browser:ItemInfoReceived(arrived)
     if redraw and f and f:IsShown() and currentQuery ~= "" then Render(true) end
 end
 
--- Skill ranks, drop counts or tracked recipes: redraw where the reader is
+-- Skill ranks or tracked recipes: redraw where the reader is
 function Browser:ItemsChanged()
     if f and f:IsShown() then Render(true) end
+end
+
+-- Drop and gathering counts show only in the detail pane, so the list stays as it is
+function Browser:CountsChanged()
+    if f and f:IsShown() then ShowDetail(true) end
 end
 
 -- Reagent counts changed ({ [itemID] = true }, nil for everything): the list when a recipe it holds uses one, since it
@@ -1571,10 +1576,10 @@ function Browser:OnEnable()
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, ReagentLine)
     end
     self:RegisterMessage("CRAFTSEEKER_ITEMS", "BagsChanged")
-    self:RegisterMessage("CRAFTSEEKER_FILTER", "FilterChanged")
+    self:RegisterBucketMessage("CRAFTSEEKER_FILTER", 0.2, "FilterChanged")
     self:RegisterEvent("TRACKED_RECIPE_UPDATE", "ItemsChanged")
     -- loot and shared counts come in bursts; one redraw every few seconds at most
-    self:RegisterBucketMessage("CRAFTSEEKER_COUNTS", 3, "ItemsChanged")
+    self:RegisterBucketMessage("CRAFTSEEKER_COUNTS", 3, "CountsChanged")
     self:RegisterBucketEvent("GET_ITEM_INFO_RECEIVED", 0.3, "ItemInfoReceived")
     -- Alt+Click any item (bags, bank, loot...) to look it up; Shift+Click drops it into a focused search box
     hooksecurefunc("HandleModifiedItemClick", function(link)
