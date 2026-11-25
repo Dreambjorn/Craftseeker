@@ -23,7 +23,7 @@ local defaults = {
         items = {},                -- [character] = { bags = { [itemID] = n }, bank = { [itemID] = n } }
         bridges = { dt = {}, fd = {}, dtSkins = {} },  -- other loot addons' counts: dt, dtSkins [npc][install], fd [player id]
         -- hidden: [profession] = true; dt, fd: read those addons' counts; opposite: list the other faction's recipes
-        settings = { sources = true, share = true, hidden = {}, dt = true, fd = true, opposite = false, filters = {}, tooltip = true, debug = false },
+        settings = { share = true, hidden = {}, dt = true, fd = true, opposite = false, filters = {}, tooltip = true, debug = false },
         minimap = { hide = false },  -- LibDBIcon's button position and visibility
     },
 }
@@ -58,10 +58,11 @@ function CS:OnInitialize()
     local old = CraftseekerDB
     if type(old) == "table" and old.recipes and not old.global then
         CraftseekerDB = { global = { recipes = old.recipes, known = old.known, sources = old.sources,
-            verified = old.verified, settings = { sources = not old.settings or old.settings.sources ~= false } } }
+            verified = old.verified } }
     end
     self.db = LibStub("AceDB-3.0"):New("CraftseekerDB", defaults, true)
     self.data = self.db.global
+    self.data.settings.sources = nil -- source tracking is always on now; the old switch is dropped
     self:RebuildIndex()
     self:RegisterChatCommand("cs", "SlashCommand")
     self:RegisterChatCommand("craftseeker", "SlashCommand")
@@ -77,7 +78,6 @@ function CS:SlashCommand(input)
         self:Print("commands:")
         print("  /cs  - open the browser")
         print("  /cs <item link, ID or name>  - look up a reagent, recipe or crafted item")
-        print("  /cs sources  - turn source tracking on/off")
         print("  /cs share  - turn sharing with other Craftseeker users on/off")
         print("  /cs options  - open the settings (also under Options > AddOns)")
         print("  /cs minimap  - show or hide the minimap button")
@@ -86,9 +86,6 @@ function CS:SlashCommand(input)
         print("  /cs hello  - announce yourself to other Craftseeker users now")
         print("  /cs reset  - wipe all learned data")
         print("  Alt+Click an item in your bags to look it up.")
-    elseif cmd == "sources" then
-        data.settings.sources = not data.settings.sources
-        self:Print("source tracking", data.settings.sources and "on" or "off")
     elseif cmd == "share" then
         data.settings.share = not data.settings.share
         self:GetModule("Share"):Apply()

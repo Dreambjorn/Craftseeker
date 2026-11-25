@@ -6,10 +6,6 @@ local guidNames, guidCount = {}, 0 -- creature GUID -> name, from target and mou
 local lastCast                     -- last spell target, e.g. "Copper Vein"
 local lootCounted = false          -- LOOT_READY can fire more than once for one loot window
 
-local function Tracking()
-    return CS.data.settings.sources
-end
-
 local function Bucket(itemID, kind)
     local all = CS.data.sources
     local s = all[itemID]
@@ -103,7 +99,7 @@ local function Remember(unit)
     if not guid or CS.IsSecret(guid) or not IsNPCGUID(guid) then return end
     if guidNames[guid] then return end
     local npc = NpcOf(guid)
-    if npc and Tracking() and CS:IsSourceNpc(npc) then Learn(npc, UnitName(unit), UnitLevel(unit), false, unit) end
+    if npc and CS:IsSourceNpc(npc) then Learn(npc, UnitName(unit), UnitLevel(unit), false, unit) end
     local name = UnitName(unit)
     if not name or CS.IsSecret(name) then return end
     -- session-only cache; drop it rather than let it grow all evening
@@ -125,7 +121,6 @@ function Sources:UNIT_SPELLCAST_SENT(_, unit, target)
 end
 
 function Sources:MERCHANT_SHOW()
-    if not Tracking() then return end
     local vendor = UnitName("npc")
     if not vendor or CS.IsSecret(vendor) then return end
     local key = vendor .. " (" .. Zone() .. ")"
@@ -243,7 +238,7 @@ local function RecordObject(guid)
 end
 
 function Sources:LOOT_READY()
-    if not Tracking() or lootCounted then return end
+    if lootCounted then return end
     lootCounted = true
     local now = GetTime()
     for key, at in pairs(looted) do
@@ -304,7 +299,7 @@ end
 
 -- Quests whose rewards hold a reagent or recipe item: name, giver and the factions that saw them offered
 function Sources:QuestRewards()
-    if not Tracking() or not GetQuestID then return end
+    if not GetQuestID then return end
     local id = GetQuestID()
     if not id or CS.IsSecret(id) or id == 0 then return end
     local items = {}
@@ -338,7 +333,6 @@ end
 
 -- Trainers that teach recipes: where they stand
 function Sources:TRAINER_SHOW()
-    if not Tracking() then return end
     local npc = NpcOf(UnitGUID("npc"))
     if npc and CS:IsSourceNpc(npc) then Learn(npc, UnitName("npc"), UnitLevel("npc"), true, "npc") end
 end

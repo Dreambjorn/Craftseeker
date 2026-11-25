@@ -30,10 +30,6 @@ function Options:BuildSettings()
         "Adds how many recipes use a crafting reagent to its item tooltip.",
         function() return data.settings.tooltip end,
         function(value) data.settings.tooltip = value end)
-    AddCheckbox(category, "sources", "Track reagent sources",
-        "Remembers the vendors, creatures, nodes and fishing spots you get reagents and recipe items from, and counts looted corpses for drop rates.",
-        function() return data.settings.sources end,
-        function(value) data.settings.sources = value end)
     AddCheckbox(category, "share", "Share loot counts",
         "Trades loot counts with every Craftseeker user online, through a hidden channel, your guild, your group and your friends lists, so everyone's drop rates improve.",
         function() return data.settings.share end,
