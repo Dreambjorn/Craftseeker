@@ -510,8 +510,6 @@ local function ZoneCell(zones)
     return icon .. zones[1] .. (#zones > 1 and (GREY .. " +" .. (#zones - 1) .. "|r") or "")
 end
 
--- Every creature that drops an item: QuestieDB's list joined with measured rates, best rate first, then
--- this zone's creatures, then by name. Nothing is cut; the pane scrolls.
 -- Chests, nodes and other objects an item comes from; QuestieDB lacks spawns for many, and where players looted
 -- them fills in
 local function AddObjects(qs, heading, key)
@@ -560,7 +558,8 @@ local function AddGathering(itemID)
     return true
 end
 
--- heading: a format for the creature count ("Recipe dropped by %d creature%s" when nil); key names the table
+-- Every creature that drops an item, best measured rate first, then this zone's, then by name; nothing is cut. heading
+-- formats the count ("Recipe dropped by %d creature%s" when nil); key names the table
 local function AddDrops(itemID, qs, heading, key)
     local byNpc, list = {}, {}
     for _, e in ipairs(qs and qs.drops or {}) do

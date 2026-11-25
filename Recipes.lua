@@ -798,7 +798,6 @@ function CS.ItemIDFromText(text)
     return nil
 end
 
--- Reagent itemIDs whose name contains the search text and that this character can use
 -- Recipes whose name or crafted item matches, as the reagent search does for reagents
 function CS:SearchRecipesByName(text)
     text = text:lower()
@@ -844,6 +843,7 @@ function CS:Difficulty(recipeID, char)
     return "orange", rank
 end
 
+-- Reagent itemIDs whose name contains the search text and that this character can use
 function CS:SearchReagentsByName(text)
     text = text:lower()
     local hits, names, uses = {}, {}, {}
