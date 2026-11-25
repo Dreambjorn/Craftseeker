@@ -268,7 +268,7 @@ function Share.Trim()
     end
     table.sort(list, function(a, b) return shared[a].at > shared[b].at end)
     for i = MAX_PEERS + 1, #list do shared[list[i]] = nil end
-    CS:CountsChanged()
+    CS:CountsChanged(false, "shared")
 end
 
 -- Peers who log in later announce themselves and get ours back, so a repeat is only needed after new loot
@@ -452,7 +452,7 @@ function Share:OnMessage(msg, chatType, sender, bnAccount)
             shared[install] = { stamp = stamp, from = sender, at = time(), counts = counts, prices = prices,
                 objects = objects, objectPins = objectPins, npcs = npcs, gather = gather, quests = quests, proven = proven }
             Share.Trim()
-            CS:CountsChanged()
+            CS:CountsChanged(false, "shared")
         end
     end
 end

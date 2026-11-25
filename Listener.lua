@@ -124,7 +124,7 @@ local function DTSkinStore(origin, npc, skinned, items)
         if e.k < fewest then smallest, fewest = o, e.k end
     end
     if count > DT_SOURCES then mobs[npc][smallest] = nil end
-    CS:CountsChanged()
+    CS:CountsChanged(false, "dt")
 end
 
 local function DTKills(entry)
@@ -158,7 +158,7 @@ local function DTStore(origin, npc, recs)
     entry.at = time()
     mobs[npc][origin] = entry
     dtKnown[origin] = true
-    CS:CountsChanged()
+    CS:CountsChanged(false, "dt")
     -- too many installs for one mob: the one with the fewest kills goes
     local count, smallest, fewest = 0, nil, math.huge
     for o, e in pairs(mobs[npc]) do
@@ -313,14 +313,14 @@ local function FDStore(origin, rec)
         book[rec.id] = { p = rec.prof, n = rec.name and #rec.name <= 60 and not rec.name:find("|", 1, true) and rec.name
             or nil, k = rec.k, i = kept, r = rec.rev }
         peer.at = time()
-        CS:CountsChanged()
+        CS:CountsChanged(false, "fd")
         return
     end
     local old = peer.npcs[rec.npc]
     if old and old.r and old.r > rec.rev then return end
     peer.npcs[rec.npc] = { k = rec.k, i = kept, r = rec.rev }
     peer.at = time()
-    CS:CountsChanged()
+    CS:CountsChanged(false, "fd")
 end
 
 function Listener:ConsiderFD(origin, rev, sender)

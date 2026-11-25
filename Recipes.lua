@@ -6,6 +6,7 @@ CS.usedIn = {}  -- [reagentItemID] = { recipeID, ... }
 CS.madeBy = {}  -- [outputItemID] = { recipeID, ... }
 
 local FACTION_CODE = { Alliance = 1, Horde = 2 }
+local AceEvent = LibStub("AceEvent-3.0")
 local lowerNames = {} -- [itemID] or ["r" .. recipeID] = lower-case name, for search
 
 local function AddIndex(index, key, recipeID)
@@ -127,8 +128,9 @@ end
 -- Recipes other Craftseeker users proved, counted by sender so one player's made-up installs unhide nothing
 local sharedProof, sharedProofFor
 function CS:SharedProof(recipeID)
-    if sharedProofFor ~= (self.othersVersion or 0) or not sharedProof then
-        sharedProofFor, sharedProof = self.othersVersion or 0, {}
+    local version = self.sourceVersion and self.sourceVersion.shared or 0
+    if sharedProofFor ~= version or not sharedProof then
+        sharedProofFor, sharedProof = version, {}
         local senders = {}
         for install, peer in pairs(self.data.shared) do
             local who = peer.from or install
@@ -164,23 +166,36 @@ function CS:GetLearnInfo(recipeID)
     return info or nil
 end
 
--- Counts other than the built-in ones, summed per creature, with the creatures each item dropped from; rebuilt only
--- after new counts arrive, so a lookup touches just the creatures that matter to the item. Our own loot is kept
--- apart: it changes every corpse, and rebuilding everyone else's counts each time cost 17 ms and 10 MB of garbage.
---   totals[npc] = { opened, own, name, items = { [itemID] = drops } }   Craftseeker and Forever Drops users
---   ownTotals, ownFrom: the same for this account's loot
+-- Counts other than the built-in ones, summed per creature, with the creatures each item dropped from; each source
+-- is rebuilt only after its own counts change, so a Drop Tables answer never rebuilds every Forever Drops peer, and a
+-- lookup touches just the creatures that matter to the item. Our own loot is kept apart: it changes every corpse.
+--   sharedTotals, fdTotals [npc] = { opened, own, name, items = { [itemID] = drops } }   Craftseeker, Forever Drops users
+--   ownTotals: the same for this account's loot
 --   dtTotals[npc] = { kills, lootable, opened, items = { [itemID] = drops } }   Drop Tables users
---   dropsFrom[itemID] = { [npc] = true }, from other players' counts
-local totals, dtTotals, dropsFrom, builtFor
+--   sharedFrom, fdFrom, dtFrom, ownFrom [itemID] = { [npc] = true }
+local sharedTotals, sharedFrom, fdTotals, fdFrom, dtTotals, dtFrom
 local ownTotals, ownFrom, ownBuiltFor
+local totalsFor = {} -- [source] = the version it was built for
+local SOURCES = { "shared", "fd", "dt" }
 
-local AceEvent = LibStub("AceEvent-3.0")
-
--- own: only this account's loot changed
-function CS:CountsChanged(own)
+-- own: only this account's loot changed; source: "shared", "fd" or "dt" when only that one did
+function CS:CountsChanged(own, source)
     self.countsVersion = (self.countsVersion or 0) + 1
-    if not own then self.othersVersion = (self.othersVersion or 0) + 1 end
+    if not own then
+        self.sourceVersion = self.sourceVersion or { shared = 0, fd = 0, dt = 0 }
+        for _, s in ipairs(SOURCES) do
+            if not source or s == source then self.sourceVersion[s] = self.sourceVersion[s] + 1 end
+        end
+    end
     AceEvent:SendMessage("CRAFTSEEKER_COUNTS")
+end
+
+-- True once per change of a source: the caller rebuilds what it keeps for it
+local function Stale(self, built, source)
+    local v = self.sourceVersion and self.sourceVersion[source] or 0
+    if built[source] == v then return false end
+    built[source] = v
+    return true
 end
 
 local function Total(t, npc)
@@ -212,35 +227,41 @@ function CS:BuildTotals()
         ownTotals, ownFrom = {}, {}
         AddCounts(ownTotals, ownFrom, self.data.counts, true)
     end
-    if builtFor == (self.othersVersion or 0) and totals then return end
-    builtFor = self.othersVersion or 0
-    totals, dtTotals, dropsFrom = {}, {}, {}
-    for _, peer in pairs(self.data.shared) do AddCounts(totals, dropsFrom, peer.counts or {}, false) end
-    -- Forever Drops records hold k corpses and i items; read in place, no copy per peer
-    for _, peer in pairs(self.data.bridges.fd) do
-        for npc, rec in pairs(peer.npcs) do
-            local e = Total(totals, npc)
-            e.opened = e.opened + (rec.k or 0)
-            for item, drops in pairs(rec.i or {}) do
-                e.items[item] = (e.items[item] or 0) + drops
-                dropsFrom[item] = dropsFrom[item] or {}
-                dropsFrom[item][npc] = true
-            end
-        end
+    if Stale(self, totalsFor, "shared") then
+        sharedTotals, sharedFrom = {}, {}
+        for _, peer in pairs(self.data.shared) do AddCounts(sharedTotals, sharedFrom, peer.counts or {}, false) end
     end
-    for npc, origins in pairs(self.data.bridges.dt) do
-        local t = { kills = 0, lootable = 0, opened = 0, items = {} }
-        for _, o in pairs(origins) do
-            for bucket, m in pairs(o.b) do
-                t.kills, t.lootable, t.opened = t.kills + m[1], t.lootable + m[2], t.opened + m[3]
-                for item, drops in pairs(o.i[bucket] or {}) do
-                    t.items[item] = (t.items[item] or 0) + drops
-                    dropsFrom[item] = dropsFrom[item] or {}
-                    dropsFrom[item][npc] = true
+    -- Forever Drops records hold k corpses and i items; read in place, no copy per peer
+    if Stale(self, totalsFor, "fd") then
+        fdTotals, fdFrom = {}, {}
+        for _, peer in pairs(self.data.bridges.fd) do
+            for npc, rec in pairs(peer.npcs) do
+                local e = Total(fdTotals, npc)
+                e.opened = e.opened + (rec.k or 0)
+                for item, drops in pairs(rec.i or {}) do
+                    e.items[item] = (e.items[item] or 0) + drops
+                    fdFrom[item] = fdFrom[item] or {}
+                    fdFrom[item][npc] = true
                 end
             end
         end
-        dtTotals[npc] = t
+    end
+    if Stale(self, totalsFor, "dt") then
+        dtTotals, dtFrom = {}, {}
+        for npc, origins in pairs(self.data.bridges.dt) do
+            local t = { kills = 0, lootable = 0, opened = 0, items = {} }
+            for _, o in pairs(origins) do
+                for bucket, m in pairs(o.b) do
+                    t.kills, t.lootable, t.opened = t.kills + m[1], t.lootable + m[2], t.opened + m[3]
+                    for item, drops in pairs(o.i[bucket] or {}) do
+                        t.items[item] = (t.items[item] or 0) + drops
+                        dtFrom[item] = dtFrom[item] or {}
+                        dtFrom[item][npc] = true
+                    end
+                end
+            end
+            dtTotals[npc] = t
+        end
     end
 end
 
@@ -267,7 +288,9 @@ function CS:GetDropRates(itemID)
     -- built-in rates measured by Craftseeker users already hold their counts: live counts replace them, never add
     local measured = {}
     for _, npc in ipairs(self.BUILTIN_OWN_RATES and self.BUILTIN_OWN_RATES[itemID] or {}) do measured[npc] = true end
-    for npc in pairs(dropsFrom[itemID] or {}) do Entry(npc, totals[npc] and totals[npc].name) end
+    for _, from in ipairs({ sharedFrom, fdFrom, dtFrom }) do
+        for npc in pairs(from[itemID] or {}) do Entry(npc, sharedTotals[npc] and sharedTotals[npc].name) end
+    end
     for npc in pairs(ownFrom[itemID] or {}) do Entry(npc, ownTotals[npc].name) end
     for _, e in ipairs(out) do
         -- Drop Tables' shared database is in the built-in counts, so its users' live counts replace them, never add
@@ -276,14 +299,13 @@ function CS:GetDropRates(itemID)
             e.drops, e.kills = (dt.items[itemID] or 0) / dt.opened * dt.lootable, dt.kills
         end
         -- every opened corpse counts, also those without the item
-        local t, own = totals[e.npc], ownTotals[e.npc]
-        if measured[e.npc] then
-            local drops = (t and t.items[itemID] or 0) + (own and own.items[itemID] or 0)
-            local kills = (t and t.opened or 0) + (own and own.opened or 0)
-            if kills > e.kills then e.drops, e.kills = drops, kills end
-        else
-            if t then e.drops, e.kills = e.drops + (t.items[itemID] or 0), e.kills + t.opened end
-            if own then e.drops, e.kills = e.drops + (own.items[itemID] or 0), e.kills + own.opened end
+        local s, fd, own = sharedTotals[e.npc], fdTotals[e.npc], ownTotals[e.npc]
+        local drops = (s and s.items[itemID] or 0) + (fd and fd.items[itemID] or 0) + (own and own.items[itemID] or 0)
+        local kills = (s and s.opened or 0) + (fd and fd.opened or 0) + (own and own.opened or 0)
+        if not measured[e.npc] then
+            e.drops, e.kills = e.drops + drops, e.kills + kills
+        elseif kills > e.kills then
+            e.drops, e.kills = drops, kills
         end
         if own and own.own > 0 then e.own = own.own end
     end
@@ -303,7 +325,9 @@ end
 -- Craftseeker users, Drop Tables users' skinning and Forever Drops users, summed per source and indexed by item.
 -- Rebuilt only after new counts; a lookup touches just the sources of the item.
 --   index[itemID] = { [key] = { kind = "k"/"g", id, p, n, k = times, drops, own } }; ours apart, like the drops
-local othersGather, othersBuiltFor, ownGather, ownGatherFor
+local sharedGather, dtGather, fdGather, ownGather, ownGatherFor
+local gatherFor = {} -- [source] = the version its index was built for
+local builtinGather, builtinSkins, liveSkinItems -- built-in index, most skins per creature, live skins over it
 local measuredGather -- [itemID] = { [key] = built-in entry Craftseeker users measured }, kept apart from the live counts
 local GATHER_PROF = { "Skinning", "Mining", "Herbalism", "Chest" }
 
@@ -334,57 +358,58 @@ local function BuildGather(self)
             for id, e in pairs(book) do AddGather(ownGather, kind, id, e, true) end
         end
     end
-    if othersBuiltFor == (self.othersVersion or 0) and othersGather then return end
-    othersBuiltFor, othersGather = self.othersVersion or 0, {}
-    for _, peer in pairs(self.data.shared) do
-        for kind, book in pairs(peer.gather or {}) do
-            for id, e in pairs(book) do AddGather(othersGather, kind, id, e, false) end
+    -- built-in counts (Drop Tables' skinning database, Polestar's nodes and chests) never change: indexed once
+    if not builtinGather then
+        builtinGather, builtinSkins, measuredGather = {}, {}, {}
+        local gathered = self.BUILTIN_GATHER or {}
+        for _, list in pairs(gathered) do
+            for i = 1, #list, 5 do
+                if list[i] == 1 then builtinSkins[list[i + 1]] = math.max(builtinSkins[list[i + 1]] or 0, list[i + 4]) end
+            end
         end
-    end
-    -- built-in counts (Drop Tables' skinning database, Polestar's nodes and chests); Drop Tables users' live skinning
-    -- replaces a creature's built-in figure once it holds more skins, never adds: the database holds the same installs
-    local live, liveItems, builtin = {}, {}, {}
-    for npc, origins in pairs(self.data.bridges.dtSkins or {}) do
-        liveItems[npc] = {}
-        for _, e in pairs(origins) do
-            live[npc] = (live[npc] or 0) + e.k
-            for item in pairs(e.i or {}) do liveItems[npc][item] = true end
+        local measured = {}
+        for item, ids in pairs(self.BUILTIN_OWN_GATHER or {}) do
+            measured[item] = {}
+            for i = 1, #ids, 2 do measured[item][(ids[i] == 1 and "k" or "g") .. ids[i + 1]] = true end
         end
-    end
-    local gathered = self.BUILTIN_GATHER or {}
-    for _, list in pairs(gathered) do
-        for i = 1, #list, 5 do
-            if list[i] == 1 then builtin[list[i + 1]] = math.max(builtin[list[i + 1]] or 0, list[i + 4]) end
-        end
-    end
-    local measured = {}
-    for item, ids in pairs(self.BUILTIN_OWN_GATHER or {}) do
-        measured[item] = {}
-        for i = 1, #ids, 2 do measured[item][(ids[i] == 1 and "k" or "g") .. ids[i + 1]] = true end
-    end
-    measuredGather = {}
-    for item, list in pairs(gathered) do
-        for i = 1, #list, 5 do
-            local kind, id, times = list[i], list[i + 1], list[i + 4]
-            local key = (kind == 1 and "k" or "g") .. id
-            local e = { p = GATHER_PROF[list[i + 2]], k = times, i = { [item] = list[i + 3] / 10000 * times } }
-            -- live counts replace an item's built-in figure only when they hold that item; otherwise it stays
-            local replaced = kind == 1 and (live[id] or 0) > builtin[id] and liveItems[id][item]
-            if measured[item] and measured[item][key] then
-                AddGather(measuredGather, kind == 1 and "k" or "g", id, e, false)
-            elseif not replaced then
-                AddGather(othersGather, kind == 1 and "k" or "g", id, e, false)
+        for item, list in pairs(gathered) do
+            for i = 1, #list, 5 do
+                local kind, id, times = list[i] == 1 and "k" or "g", list[i + 1], list[i + 4]
+                local e = { p = GATHER_PROF[list[i + 2]], k = times, i = { [item] = list[i + 3] / 10000 * times } }
+                AddGather(measured[item] and measured[item][kind .. id] and measuredGather or builtinGather, kind, id, e, false)
             end
         end
     end
-    for npc, origins in pairs(self.data.bridges.dtSkins or {}) do
-        if not builtin[npc] or live[npc] > builtin[npc] then
-            for _, e in pairs(origins) do AddGather(othersGather, "k", npc, e, false) end
+    if Stale(self, gatherFor, "shared") then
+        sharedGather = {}
+        for _, peer in pairs(self.data.shared) do
+            for kind, book in pairs(peer.gather or {}) do
+                for id, e in pairs(book) do AddGather(sharedGather, kind, id, e, false) end
+            end
         end
     end
-    for _, peer in pairs(self.data.bridges.fd) do
-        for kind, book in pairs(peer.gather or {}) do
-            for id, e in pairs(book) do AddGather(othersGather, kind, id, e, false) end
+    -- Drop Tables users' live skinning replaces a creature's built-in figure once it holds more skins, never adds:
+    -- the database holds the same installs
+    if Stale(self, gatherFor, "dt") then
+        dtGather, liveSkinItems = {}, {}
+        for npc, origins in pairs(self.data.bridges.dtSkins or {}) do
+            local live, items = 0, {}
+            for _, e in pairs(origins) do
+                live = live + e.k
+                for item in pairs(e.i or {}) do items[item] = true end
+            end
+            if live > (builtinSkins[npc] or 0) then
+                liveSkinItems[npc] = items
+                for _, e in pairs(origins) do AddGather(dtGather, "k", npc, e, false) end
+            end
+        end
+    end
+    if Stale(self, gatherFor, "fd") then
+        fdGather = {}
+        for _, peer in pairs(self.data.bridges.fd) do
+            for kind, book in pairs(peer.gather or {}) do
+                for id, e in pairs(book) do AddGather(fdGather, kind, id, e, false) end
+            end
         end
     end
 end
@@ -393,7 +418,7 @@ end
 function CS:GetGatherRates(itemID)
     BuildGather(self)
     local merged = {}
-    for _, index in ipairs({ othersGather, ownGather }) do
+    for _, index in ipairs({ sharedGather, dtGather, fdGather, ownGather }) do
         for key, t in pairs(index[itemID] or {}) do
             local m = merged[key]
             if not m then
@@ -401,6 +426,19 @@ function CS:GetGatherRates(itemID)
                 merged[key] = m
             end
             m.k, m.drops, m.own = m.k + t.k, m.drops + t.drops, m.own + t.own
+            m.p, m.n = m.p or t.p, m.n or t.n
+        end
+    end
+    -- live counts replace an item's built-in figure only when they hold that item; otherwise it stays
+    for key, t in pairs(builtinGather[itemID] or {}) do
+        local live = t.kind == "k" and liveSkinItems[t.id]
+        if not (live and live[itemID]) then
+            local m = merged[key]
+            if not m then
+                m = { kind = t.kind, id = t.id, p = t.p, n = t.n, k = 0, drops = 0, own = 0 }
+                merged[key] = m
+            end
+            m.k, m.drops = m.k + t.k, m.drops + t.drops
             m.p, m.n = m.p or t.p, m.n or t.n
         end
     end
