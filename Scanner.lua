@@ -67,7 +67,9 @@ function Scanner:Scan()
     for _, recipeID in ipairs(ids) do
         listed[recipeID] = true
         local rec, info = ScanRecipe(recipeID)
-        if rec then
+        if rec and CS:SameAsBuiltin(recipeID, rec) then
+            data.recipes[recipeID] = nil
+        elseif rec then
             local old = CS.recipes[recipeID]
             if old and IndexChanged(old, rec) then rebuild = true end
             CS:SetRecipe(recipeID, rec)

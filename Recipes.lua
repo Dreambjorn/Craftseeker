@@ -70,6 +70,25 @@ function CS:RebuildIndex()
     end
 end
 
+-- A window's recipe the built-in data already holds as is: no need to save a copy
+function CS:SameAsBuiltin(recipeID, rec)
+    local d = self.BUILTIN and self.BUILTIN[recipeID]
+    if not d or d[1] ~= rec.n or d[2] ~= rec.p or d[3] ~= rec.o or d[4] ~= (rec.q or 1) or #d[5] ~= 2 * #(rec.r or {}) then
+        return false
+    end
+    for i, r in ipairs(rec.r) do
+        if r[3] or d[5][2 * i - 1] ~= r[1] or d[5][2 * i] ~= r[2] then return false end
+    end
+    return true
+end
+
+-- Window scans used to save every recipe; copies of built-in ones are dropped at login, the rest stay
+function CS:DropBuiltinCopies()
+    for id, rec in pairs(self.data.recipes) do
+        if self:SameAsBuiltin(id, rec) then self.data.recipes[id] = nil end
+    end
+end
+
 function CS:SetRecipe(recipeID, rec)
     lowerNames["r" .. recipeID] = nil
     self.data.recipes[recipeID] = rec

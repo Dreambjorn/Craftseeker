@@ -63,6 +63,7 @@ function CS:OnInitialize()
     self.db = LibStub("AceDB-3.0"):New("CraftseekerDB", defaults, true)
     self.data = self.db.global
     self.data.settings.sources = nil -- source tracking is always on now; the old switch is dropped
+    self:DropBuiltinCopies()
     self:RebuildIndex()
     self:RegisterChatCommand("cs", "SlashCommand")
     self:RegisterChatCommand("craftseeker", "SlashCommand")
