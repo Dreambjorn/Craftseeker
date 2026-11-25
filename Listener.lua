@@ -427,21 +427,33 @@ function Listener:Tick()
     end
 end
 
--- Joins or leaves the two hidden channels as the settings say
+-- Joins or leaves the two hidden channels as the settings say: leaves at once, joins at most once a minute, as Share does
+local APPLY_GAP = 60
+local lastJoin = -APPLY_GAP
 function Listener:Apply()
-    if DTEnabled() and not dtChannel then
-        JoinHidden(DT_CHANNEL)
-    elseif not DTEnabled() and dtChannel then
+    if self.pendingJoin then
+        self:CancelTimer(self.pendingJoin)
+        self.pendingJoin = nil
+    end
+    if not DTEnabled() and dtChannel then
         pcall(LeaveChannelByName, DT_CHANNEL)
         dtChannel = nil
     end
-    -- joins a few seconds apart: back-to-back joins draw the server's "doing that too fast"
-    if FDEnabled() and not fdChannel then
-        C_Timer.After(JOIN_GAP, function() JoinHidden(FD_CHANNEL) end)
-    elseif not FDEnabled() and fdChannel then
+    if not FDEnabled() and fdChannel then
         pcall(LeaveChannelByName, FD_CHANNEL)
         fdChannel = nil
     end
+    local joinDT, joinFD = DTEnabled() and not dtChannel, FDEnabled() and not fdChannel
+    if not joinDT and not joinFD then return end
+    local wait = lastJoin + APPLY_GAP - GetTime()
+    if wait > 0 then
+        self.pendingJoin = self:ScheduleTimer("Apply", wait)
+        return
+    end
+    lastJoin = GetTime()
+    if joinDT then JoinHidden(DT_CHANNEL) end
+    -- joins a few seconds apart: back-to-back joins draw the server's "doing that too fast"
+    if joinFD then C_Timer.After(JOIN_GAP, function() JoinHidden(FD_CHANNEL) end) end
     self:ScheduleTimer("ChannelsJoined", JOIN_GAP + 3)
 end
 

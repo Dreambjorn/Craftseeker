@@ -507,9 +507,22 @@ function Share:ChannelChecked(token)
     pcall(LeaveChannelByName, CHANNEL)
 end
 
--- The settings checkbox: joins or leaves the channel at once
+-- The settings checkbox and /cs share: leave at once; join and announce at most once a minute, so flipping the switch
+-- never floods the channel, the guild, the group or friends
+local APPLY_GAP = 60
+local lastOn = -APPLY_GAP
 function Share:Apply()
+    if self.pendingOn then
+        self:CancelTimer(self.pendingOn)
+        self.pendingOn = nil
+    end
     if Enabled() then
+        local wait = lastOn + APPLY_GAP - GetTime()
+        if wait > 0 then
+            self.pendingOn = self:ScheduleTimer("Apply", wait)
+            return
+        end
+        lastOn = GetTime()
         self:JoinChannel()
         self:Hello()
     else
