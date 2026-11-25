@@ -1,6 +1,6 @@
 -- Craftseeker: reads the loot counts two other loot addons trade on Forever, so the drop rates grow with theirs too
 local _, CS = ...
-local Bridges = CS:NewModule("Bridges", "AceEvent-3.0", "AceTimer-3.0")
+local Listener = CS:NewModule("Listener", "AceEvent-3.0", "AceTimer-3.0")
 
 local TICK = 1.1
 
@@ -43,7 +43,7 @@ local function DTEnabled()
 end
 
 -- The records of one message, all about one mob, or nil when anything in it is malformed or impossible
-function Bridges.DecodeDT(body)
+function Listener.DecodeDT(body)
     local recs, npc = {}, nil
     for text in (body .. ";"):gmatch("([^;]*);") do
         local kind = text:sub(1, 1)
@@ -83,7 +83,7 @@ function Bridges.DecodeDT(body)
 end
 
 -- An S| message: one mob's skinning, "K<npc>.<skinned>" and "U<npc>.<item>.<drops>.<qty>.<min>.<max>" records
-function Bridges.DecodeDTSkins(body)
+function Listener.DecodeDTSkins(body)
     local npc, skinned, items = nil, nil, {}
     for text in (body .. ";"):gmatch("([^;]*);") do
         local kind, rest = text:sub(1, 1), text:sub(2)
@@ -182,7 +182,7 @@ local function DTQuestion(npc)
     return head .. table.concat(held, ",")
 end
 
-function Bridges:AskDT(npc)
+function Listener:AskDT(npc)
     if not DTEnabled() or not dtChannel or not CS:IsRelevantNpc(npc) then return end
     local now, last = GetTime(), dtAsked[npc]
     if last and now - last.at < DT_PAUSES[last.answers > 0 and 1 or last.step] then return end
@@ -201,14 +201,14 @@ function Bridges:AskDT(npc)
     Enqueue(DT_PREFIX, "CHANNEL", dtChannel, DTQuestion(npc))
 end
 
-function Bridges:OnDT(msg, chatType, sender)
+function Listener:OnDT(msg, chatType, sender)
     local kind, origin, body = msg:match("^([DSQC])|(%x+)|(.*)$")
     if not kind or kind == "Q" or kind == "C" or #origin ~= 16 or origin == CS.data.dtInstall then return end
     local npc, recs, skinned
     if kind == "S" then
-        npc, skinned, recs = Bridges.DecodeDTSkins(body)
+        npc, skinned, recs = Listener.DecodeDTSkins(body)
     else
-        npc, recs = Bridges.DecodeDT(body)
+        npc, recs = Listener.DecodeDT(body)
     end
     if not npc then return end
     local group = chatType == "PARTY" or chatType == "RAID" or chatType == "INSTANCE_CHAT"
@@ -255,7 +255,7 @@ local function FDEnabled()
 end
 
 -- A mob's record as { npc, rev, k = corpses looted, items = { [itemID] = drops } }, or nil
-function Bridges.ParseFD(text)
+function Listener.ParseFD(text)
     if type(text) ~= "string" or #text > 4000 then return nil end
     local f = {}
     for v in (text .. "~"):gmatch("([^~]*)~") do f[#f + 1] = v end
@@ -323,7 +323,7 @@ local function FDStore(origin, rec)
     CS:CountsChanged()
 end
 
-function Bridges:ConsiderFD(origin, rev, sender)
+function Listener:ConsiderFD(origin, rev, sender)
     rev = tonumber(rev)
     if not rev or not origin or #origin > 20 or not sender then return end
     local peer = CS.data.bridges.fd[origin]
@@ -351,7 +351,7 @@ local fdKinds = {
         local wait = Asked(origin, sender)
         if not wait then return end
         wait.t = GetTime()
-        local rec = Bridges.ParseFD(rest)
+        local rec = Listener.ParseFD(rest)
         if rec then FDStore(origin, rec) end
     end,
     E = function(_, origin, rest, sender)
@@ -364,7 +364,7 @@ local fdKinds = {
 }
 fdKinds.A = fdKinds.H
 
-function Bridges:HandleFD(payload, sender)
+function Listener:HandleFD(payload, sender)
     local kind, origin, rest = payload:match("^(%a)%^([^%^]+)%^?(.*)$")
     local handle = kind and fdKinds[kind]
     if handle then handle(self, origin, rest, sender) end
@@ -373,7 +373,7 @@ end
 local PIECE = { ["1"] = "whole", ["2"] = "first", ["3"] = "middle", ["4"] = "last" }
 local MAX_PIECES = 16
 
-function Bridges:OnFD(msg, chatType, sender)
+function Listener:OnFD(msg, chatType, sender)
     local piece = PIECE[msg:sub(1, 1)]
     if not piece then return end
     local key, body = sender .. "\0" .. chatType, msg:sub(2)
@@ -405,7 +405,7 @@ end
 
 -- Both ------------------------------------------------------------------------
 
-function Bridges:CHAT_MSG_ADDON(_, prefix, msg, chatType, sender)
+function Listener:CHAT_MSG_ADDON(_, prefix, msg, chatType, sender)
     if CS.IsSecret(prefix, msg, chatType, sender) or type(msg) ~= "string" or type(sender) ~= "string" then return end
     if prefix == DT_PREFIX and DTEnabled() then
         self:OnDT(msg, chatType, sender)
@@ -414,12 +414,12 @@ function Bridges:CHAT_MSG_ADDON(_, prefix, msg, chatType, sender)
     end
 end
 
-function Bridges:PLAYER_TARGET_CHANGED()
+function Listener:PLAYER_TARGET_CHANGED()
     local npc = NpcFromGUID(UnitGUID("target"))
     if npc then self:AskDT(npc) end
 end
 
-function Bridges:Tick()
+function Listener:Tick()
     if dtWaiting[1] and GetTime() - dtLast >= DT_GAP then self:AskDT(table.remove(dtWaiting, 1)) end
     if not dtWaiting[1] and self.ticker then
         self:CancelTimer(self.ticker)
@@ -428,7 +428,7 @@ function Bridges:Tick()
 end
 
 -- Joins or leaves the two hidden channels as the settings say
-function Bridges:Apply()
+function Listener:Apply()
     if DTEnabled() and not dtChannel then
         JoinHidden(DT_CHANNEL)
     elseif not DTEnabled() and dtChannel then
@@ -445,7 +445,7 @@ function Bridges:Apply()
     self:ScheduleTimer("ChannelsJoined", JOIN_GAP + 3)
 end
 
-function Bridges:ChannelsJoined()
+function Listener:ChannelsJoined()
     if DTEnabled() then
         dtChannel = CS.ChannelNumber(DT_CHANNEL)
         if dtChannel then CS.HideChannel(DT_CHANNEL) end
@@ -457,7 +457,7 @@ function Bridges:ChannelsJoined()
 end
 
 -- Counts not refreshed in a month go at login
-function Bridges.Prune()
+function Listener.Prune()
     local now, b = time(), CS.data.bridges
     for npc, origins in pairs(b.dt) do
         for origin, entry in pairs(origins) do
@@ -480,7 +480,7 @@ function Bridges.Prune()
 end
 
 -- Install ids and mobs held, for /cs stats
-function Bridges:Stats()
+function Listener:Stats()
     local dtInstalls, fdPeers = {}, 0
     for _, origins in pairs(CS.data.bridges.dt) do
         for o in pairs(origins) do dtInstalls[o] = true end
@@ -491,13 +491,13 @@ function Bridges:Stats()
     return n, fdPeers
 end
 
-function Bridges:OnEnable()
+function Listener:OnEnable()
     if not CS.data.dtInstall then
         local parts = {}
         for i = 1, 4 do parts[i] = ("%04x"):format(math.random(0, 0xffff)) end
         CS.data.dtInstall = table.concat(parts)
     end
-    Bridges.Prune()
+    Listener.Prune()
     C_ChatInfo.RegisterAddonMessagePrefix(DT_PREFIX)
     C_ChatInfo.RegisterAddonMessagePrefix(FD_PREFIX)
     self:RegisterEvent("CHAT_MSG_ADDON")

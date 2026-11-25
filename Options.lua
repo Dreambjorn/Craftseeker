@@ -42,14 +42,14 @@ function Options:BuildSettings()
         function() return data.settings.dt end,
         function(value)
             data.settings.dt = value
-            CS:GetModule("Bridges"):Apply()
+            CS:GetModule("Listener"):Apply()
         end)
     AddCheckbox(category, "fd", "Read Forever Drops counts",
         "Asks Forever Drops users who announce themselves in your guild, your group or its hidden channel for their loot counts, and adds them to the drop rates.",
         function() return data.settings.fd end,
         function(value)
             data.settings.fd = value
-            CS:GetModule("Bridges"):Apply()
+            CS:GetModule("Listener"):Apply()
         end)
     AddCheckbox(category, "opposite", "Show opposite faction",
         "Also lists recipes only the opposite faction can learn. The factions can't trade, so they are hidden unless you tick this.",

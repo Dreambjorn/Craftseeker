@@ -13,14 +13,14 @@ Libs\embeds.xml
 
 Core.lua
 Recipes.lua
-SourceDB.lua
+SourceLookup.lua
 Data.lua
 Format.lua
 Scanner.lua
-Sources.lua
+Recorder.lua
 Comms.lua
 Inventory.lua
 Share.lua
-Bridges.lua
+Listener.lua
 Browser.lua
 Options.lua

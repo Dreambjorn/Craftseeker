@@ -1,6 +1,6 @@
 -- Craftseeker: records where reagents came from (vendors, loot, gathering, fishing)
 local _, CS = ...
-local Sources = CS:NewModule("Sources", "AceEvent-3.0")
+local Recorder = CS:NewModule("Recorder", "AceEvent-3.0")
 
 local guidNames, guidCount = {}, 0 -- creature GUID -> name, from target and mouseover; also marks creatures learned
 local lastCast                     -- last spell target, e.g. "Copper Vein"
@@ -111,16 +111,16 @@ local function Remember(unit)
     guidCount = guidCount + 1
 end
 
-function Sources:PLAYER_TARGET_CHANGED() Remember("target") end
-function Sources:UPDATE_MOUSEOVER_UNIT() Remember("mouseover") end
+function Recorder:PLAYER_TARGET_CHANGED() Remember("target") end
+function Recorder:UPDATE_MOUSEOVER_UNIT() Remember("mouseover") end
 
-function Sources:UNIT_SPELLCAST_SENT(_, unit, target)
+function Recorder:UNIT_SPELLCAST_SENT(_, unit, target)
     -- the whole payload can be secret, and comparing a secret value errors
     if CS.IsSecret(unit) or CS.IsSecret(target) or unit ~= "player" then return end
     lastCast = target and target ~= "" and { target = target, t = GetTime() } or nil
 end
 
-function Sources:MERCHANT_SHOW()
+function Recorder:MERCHANT_SHOW()
     local vendor = UnitName("npc")
     if not vendor or CS.IsSecret(vendor) then return end
     local key = vendor .. " (" .. Zone() .. ")"
@@ -181,7 +181,7 @@ local LOOTED_TTL = 600      -- a corpse or node reopened within this (full bags)
 local lastGather            -- { prof, at } of the last gathering cast
 local looted = {}           -- ["d"/"g" .. guid] = GetTime() it was counted
 
-function Sources:UNIT_SPELLCAST_SUCCEEDED(_, unit, _, spellID)
+function Recorder:UNIT_SPELLCAST_SUCCEEDED(_, unit, _, spellID)
     if CS.IsSecret(unit, spellID) or unit ~= "player" or not spellID then return end
     local name = C_Spell.GetSpellName(spellID)
     local prof = name and not CS.IsSecret(name) and GATHER_SPELLS[name]
@@ -237,7 +237,7 @@ local function RecordObject(guid)
     zones[Zone()] = (zones[Zone()] or 0) + 1
 end
 
-function Sources:LOOT_READY()
+function Recorder:LOOT_READY()
     if lootCounted then return end
     lootCounted = true
     local now = GetTime()
@@ -298,7 +298,7 @@ function Sources:LOOT_READY()
 end
 
 -- Quests whose rewards hold a reagent or recipe item: name, giver and the factions that saw them offered
-function Sources:QuestRewards()
+function Recorder:QuestRewards()
     if not GetQuestID then return end
     local id = GetQuestID()
     if not id or CS.IsSecret(id) or id == 0 then return end
@@ -332,16 +332,16 @@ function Sources:QuestRewards()
 end
 
 -- Trainers that teach recipes: where they stand
-function Sources:TRAINER_SHOW()
+function Recorder:TRAINER_SHOW()
     local npc = NpcOf(UnitGUID("npc"))
     if npc and CS:IsSourceNpc(npc) then Learn(npc, UnitName("npc"), UnitLevel("npc"), true, "npc") end
 end
 
-function Sources:LOOT_CLOSED()
+function Recorder:LOOT_CLOSED()
     lootCounted = false
 end
 
-function Sources:OnEnable()
+function Recorder:OnEnable()
     self:RegisterEvent("PLAYER_TARGET_CHANGED")
     self:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
     self:RegisterEvent("UNIT_SPELLCAST_SENT")

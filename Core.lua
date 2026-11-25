@@ -110,7 +110,7 @@ function CS:SlashCommand(input)
         for _ in pairs(data.sources) do srcs = srcs + 1 end
         local peers = 0
         for _ in pairs(data.shared) do peers = peers + 1 end
-        local dt, fd = self:GetModule("Bridges"):Stats()
+        local dt, fd = self:GetModule("Listener"):Stats()
         self:Print(self:CountRecipes() .. " recipes, " .. reagents .. " reagents, sources for " .. srcs .. " items, "
             .. "loot counts from " .. peers .. " other Craftseeker user" .. (peers == 1 and "" or "s")
             .. ", " .. dt .. " Drop Tables and " .. fd .. " Forever Drops users")
