@@ -121,6 +121,7 @@ local function Flush()
 end
 
 local function Sent(m, didSend, result)
+    if m.onSent then m.onSent(didSend) end
     if didSend and m.chatType == "WHISPER" then Remember(m) end
     if not didSend and m.chatType == "WHISPER" and not m.dashed and result ~= THROTTLED and CS.DashedName(m.target) then
         m.target, m.dashed = CS.DashedName(m.target), true
@@ -150,9 +151,9 @@ function Transmit(m)
     end
 end
 
--- prio: "NORMAL" for announcements and requests, "BULK" for data
-function CS.Transmit(prefix, chatType, target, msg, prio)
-    Transmit({ prefix = prefix, chatType = chatType, target = target, msg = msg, prio = prio or "NORMAL" })
+-- prio: "NORMAL" for announcements and requests, "BULK" for data; onSent(didSend) runs once it really goes out
+function CS.Transmit(prefix, chatType, target, msg, prio, onSent)
+    Transmit({ prefix = prefix, chatType = chatType, target = target, msg = msg, prio = prio or "NORMAL", onSent = onSent })
 end
 
 -- Combat lockdown and boss fights hold addon messages back

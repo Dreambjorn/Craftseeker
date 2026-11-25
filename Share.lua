@@ -65,8 +65,8 @@ end
 
 -- Sending ---------------------------------------------------------------------
 
-local function Send(chatType, target, msg, prio)
-    CS.Transmit(PREFIX, chatType, target, msg, prio)
+local function Send(chatType, target, msg, prio, onSent)
+    CS.Transmit(PREFIX, chatType, target, msg, prio, onSent)
 end
 
 local GATHER_PROFS = { Skinning = true, Mining = true, Herbalism = true, Chest = true }
@@ -491,14 +491,17 @@ function Share:ChannelJoined()
     channelId = CS.ChannelNumber(CHANNEL)
     if not channelId then return end
     CS.HideChannel(CHANNEL)
-    pingToken = math.random(100000, 999999)
-    Send("CHANNEL", channelId, "P" .. VERSION .. "," .. CS.data.install .. "," .. pingToken)
-    self:ScheduleTimer("ChannelChecked", 20)
+    local token = math.random(100000, 999999)
+    pingToken = token
+    -- the wait starts once the ping leaves: messaging lockdown can hold it back for a whole boss fight
+    Send("CHANNEL", channelId, "P" .. VERSION .. "," .. CS.data.install .. "," .. token, nil, function()
+        self:ScheduleTimer("ChannelChecked", 20, token)
+    end)
 end
 
 -- No ping back: this client doesn't carry addon messages there, so the channel is left until the next login
-function Share:ChannelChecked()
-    if channelOk or not channelId then return end
+function Share:ChannelChecked(token)
+    if token ~= pingToken or channelOk or not channelId then return end
     CS:Debug("sharing channel %s carries no addon messages; left until the next login", CHANNEL)
     channelOk, channelId = false, nil
     pcall(LeaveChannelByName, CHANNEL)
