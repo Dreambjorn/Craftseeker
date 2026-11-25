@@ -87,6 +87,7 @@ function CS:SlashCommand(input)
         print("  /cs stats  - what's been learned so far")
         print("  /cs status  - whether sharing reaches other players this session")
         print("  /cs reset  - wipe learned data; keeps favorites, settings and your characters' item counts and skill ranks")
+        print("  /cs profile  - start measuring time and memory; again to stop and print the report")
         print("  Alt+Click an item in your bags to look it up.")
     elseif cmd == "share" then
         data.settings.share = not data.settings.share
@@ -96,6 +97,8 @@ function CS:SlashCommand(input)
         self:OpenSettings()
     elseif cmd == "minimap" then
         self:SetMinimapButton(data.minimap.hide)
+    elseif cmd == "profile" then
+        self.Profiler:Toggle()
     elseif cmd == "status" then
         -- is sharing reaching anyone: the channel's self-test and what came and went this session
         for _, line in ipairs(self:GetModule("Share"):Status()) do print("  " .. line) end

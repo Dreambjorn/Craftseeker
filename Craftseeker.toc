@@ -12,6 +12,7 @@
 Libs\embeds.xml
 
 Core.lua
+Profiler.lua
 Recipes.lua
 SourceLookup.lua
 Data.lua

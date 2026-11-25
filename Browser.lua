@@ -1655,9 +1655,13 @@ local function ReagentLine(tooltip, data)
         GREY), 1, 1, 1)
 end
 
+-- the window's own drawing, which the method profiling can't see
+Render, ShowDetail, DrawDetail = CS.Profile("Browser Render", Render), CS.Profile("Browser ShowDetail", ShowDetail),
+    CS.Profile("Browser DrawDetail", DrawDetail)
+
 function Browser:OnEnable()
     if TooltipDataProcessor and Enum.TooltipDataType then
-        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, ReagentLine)
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, CS.Profile("Browser ReagentLine", ReagentLine))
     end
     self:RegisterMessage("CRAFTSEEKER_ITEMS", "BagsChanged")
     self:RegisterBucketMessage("CRAFTSEEKER_FILTER", 0.2, "FilterChanged")
