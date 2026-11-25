@@ -64,9 +64,10 @@ function CS:RebuildIndex()
     for recipeID, rec in pairs(self.recipes) do
         self:IndexRecipe(recipeID, rec)
     end
+    -- recipeItems[itemID] = { recipeID, ... }: what each recipe item teaches
     self.recipeItems = {}
-    for _, s in pairs(self.BUILTIN_SOURCES or {}) do
-        if s[4] > 0 then self.recipeItems[s[4]] = true end
+    for recipeID, s in pairs(self.BUILTIN_SOURCES or {}) do
+        if s[4] > 0 then AddIndex(self.recipeItems, s[4], recipeID) end
     end
 end
 
@@ -116,6 +117,11 @@ function CS:Prove(recipeID)
         self.data.countsStamp = time()
         self:CountsChanged(true)
     end
+end
+
+-- A recipe item for sale, looted or offered proves the recipes it teaches
+function CS:ProveItem(itemID)
+    for _, recipeID in ipairs(self.recipeItems[itemID] or {}) do self:Prove(recipeID) end
 end
 
 function CS:CountRecipes()

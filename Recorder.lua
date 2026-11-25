@@ -130,6 +130,7 @@ function Recorder:MERCHANT_SHOW()
         local itemID = GetMerchantItemID(i)
         -- only reagents and recipe items; the price covers the whole stack the vendor sells, e.g. 5 for x
         if itemID and (CS.usedIn[itemID] or CS.recipeItems[itemID]) then
+            CS:ProveItem(itemID)
             local ok, info = pcall(C_MerchantFrame.GetItemInfo, i)
             local copper, stack = ok and info and info.price, ok and info and math.max(info.stackCount or 1, 1) or 1
             if CS.usedIn[itemID] then
@@ -252,6 +253,7 @@ function Recorder:LOOT_READY()
         local link = GetLootSlotLink(slot)
         local itemID = link and CS.ItemIDFromText(link)
         local counted = itemID and (CS.usedIn[itemID] or CS.recipeItems[itemID]) and itemID or nil
+        if counted then CS:ProveItem(counted) end
         -- area loot gives guid, quantity pairs, one per corpse or node
         local src = { GetLootSourceInfo(slot) }
         for i = 1, #src, 2 do
@@ -307,7 +309,10 @@ function Recorder:QuestRewards()
         for i = 1, kind[2] or 0 do
             local link = GetQuestItemLink(kind[1], i)
             local itemID = link and not CS.IsSecret(link) and CS.ItemIDFromText(link)
-            if itemID and (CS.usedIn[itemID] or CS.recipeItems[itemID]) then items[itemID] = true end
+            if itemID and (CS.usedIn[itemID] or CS.recipeItems[itemID]) then
+                items[itemID] = true
+                CS:ProveItem(itemID)
+            end
         end
     end
     if not next(items) then return end
@@ -331,10 +336,36 @@ function Recorder:QuestRewards()
     if news then CS.data.countsStamp = time() end
 end
 
+-- A trainer's services prove the recipes they name, within the profession most names belong to; a name two recipes
+-- of that profession share proves neither (Blizzard_TrainerUI reads services the same way, the step index aside)
+function Recorder:TRAINER_UPDATE()
+    local names, step = {}, GetTrainerServiceStepIndex()
+    for i = 1, GetNumTrainerServices() do
+        local name = i ~= step and GetTrainerServiceInfo(i)
+        if name and not CS.IsSecret(name) then names[name] = true end
+    end
+    local byProf, best = {}, nil
+    for id, rec in pairs(CS.recipes) do
+        if rec.n and names[rec.n] then
+            local p = byProf[rec.p or "?"] or {}
+            byProf[rec.p or "?"] = p
+            p[rec.n] = p[rec.n] == nil and id or false
+        end
+    end
+    local function Size(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+    for p, list in pairs(byProf) do
+        if not best or Size(list) > Size(byProf[best]) then best = p end
+    end
+    for _, id in pairs(best and byProf[best] or {}) do
+        if id then CS:Prove(id) end
+    end
+end
+
 -- Trainers that teach recipes: where they stand
 function Recorder:TRAINER_SHOW()
     local npc = NpcOf(UnitGUID("npc"))
     if npc and CS:IsSourceNpc(npc) then Learn(npc, UnitName("npc"), UnitLevel("npc"), true, "npc") end
+    self:TRAINER_UPDATE()
 end
 
 function Recorder:LOOT_CLOSED()
@@ -348,6 +379,7 @@ function Recorder:OnEnable()
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     self:RegisterEvent("MERCHANT_SHOW")
     self:RegisterEvent("TRAINER_SHOW")
+    self:RegisterEvent("TRAINER_UPDATE")
     self:RegisterEvent("QUEST_DETAIL", "QuestRewards")
     self:RegisterEvent("QUEST_COMPLETE", "QuestRewards")
     self:RegisterEvent("LOOT_READY")
