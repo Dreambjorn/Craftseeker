@@ -223,6 +223,9 @@ function CS:GetDropRates(itemID)
         local e = Entry(r[i], r[i + 1])
         e.drops, e.kills = r[i + 2] / 10000 * r[i + 3], r[i + 3]
     end
+    -- built-in rates measured by Craftseeker users already hold their counts: live counts replace them, never add
+    local measured = {}
+    for _, npc in ipairs(self.BUILTIN_OWN_RATES and self.BUILTIN_OWN_RATES[itemID] or {}) do measured[npc] = true end
     for npc in pairs(dropsFrom[itemID] or {}) do Entry(npc, totals[npc] and totals[npc].name) end
     for npc in pairs(ownFrom[itemID] or {}) do Entry(npc, ownTotals[npc].name) end
     for _, e in ipairs(out) do
@@ -233,11 +236,15 @@ function CS:GetDropRates(itemID)
         end
         -- every opened corpse counts, also those without the item
         local t, own = totals[e.npc], ownTotals[e.npc]
-        if t then e.drops, e.kills = e.drops + (t.items[itemID] or 0), e.kills + t.opened end
-        if own then
-            e.drops, e.kills = e.drops + (own.items[itemID] or 0), e.kills + own.opened
-            if own.own > 0 then e.own = own.own end
+        if measured[e.npc] then
+            local drops = (t and t.items[itemID] or 0) + (own and own.items[itemID] or 0)
+            local kills = (t and t.opened or 0) + (own and own.opened or 0)
+            if kills > e.kills then e.drops, e.kills = drops, kills end
+        else
+            if t then e.drops, e.kills = e.drops + (t.items[itemID] or 0), e.kills + t.opened end
+            if own then e.drops, e.kills = e.drops + (own.items[itemID] or 0), e.kills + own.opened end
         end
+        if own and own.own > 0 then e.own = own.own end
     end
     for i = #out, 1, -1 do
         if out[i].kills <= 0 then table.remove(out, i) end
@@ -256,6 +263,7 @@ end
 -- Rebuilt only after new counts; a lookup touches just the sources of the item.
 --   index[itemID] = { [key] = { kind = "k"/"g", id, p, n, k = times, drops, own } }; ours apart, like the drops
 local othersGather, othersBuiltFor, ownGather, ownGatherFor
+local measuredGather -- [itemID] = { [key] = built-in entry Craftseeker users measured }, kept apart from the live counts
 local GATHER_PROF = { "Skinning", "Mining", "Herbalism", "Chest" }
 
 local function AddGather(index, kind, id, e, own)
@@ -308,14 +316,23 @@ local function BuildGather(self)
             if list[i] == 1 then builtin[list[i + 1]] = math.max(builtin[list[i + 1]] or 0, list[i + 4]) end
         end
     end
+    local measured = {}
+    for item, ids in pairs(self.BUILTIN_OWN_GATHER or {}) do
+        measured[item] = {}
+        for i = 1, #ids, 2 do measured[item][(ids[i] == 1 and "k" or "g") .. ids[i + 1]] = true end
+    end
+    measuredGather = {}
     for item, list in pairs(gathered) do
         for i = 1, #list, 5 do
             local kind, id, times = list[i], list[i + 1], list[i + 4]
+            local key = (kind == 1 and "k" or "g") .. id
+            local e = { p = GATHER_PROF[list[i + 2]], k = times, i = { [item] = list[i + 3] / 10000 * times } }
             -- live counts replace an item's built-in figure only when they hold that item; otherwise it stays
             local replaced = kind == 1 and (live[id] or 0) > builtin[id] and liveItems[id][item]
-            if not replaced then
-                AddGather(othersGather, kind == 1 and "k" or "g", id,
-                    { p = GATHER_PROF[list[i + 2]], k = times, i = { [item] = list[i + 3] / 10000 * times } }, false)
+            if measured[item] and measured[item][key] then
+                AddGather(measuredGather, kind == 1 and "k" or "g", id, e, false)
+            elseif not replaced then
+                AddGather(othersGather, kind == 1 and "k" or "g", id, e, false)
             end
         end
     end
@@ -344,6 +361,14 @@ function CS:GetGatherRates(itemID)
             end
             m.k, m.drops, m.own = m.k + t.k, m.drops + t.drops, m.own + t.own
             m.p, m.n = m.p or t.p, m.n or t.n
+        end
+    end
+    -- built-in figures Craftseeker users measured already hold their windows: the bigger of them and the live counts
+    for key, b in pairs(measuredGather[itemID] or {}) do
+        local m = merged[key]
+        if not m or m.k < b.k then
+            merged[key] = { kind = b.kind, id = b.id, p = b.p or (m and m.p), n = b.n or (m and m.n), k = b.k,
+                drops = b.drops, own = m and m.own or 0 }
         end
     end
     local out = {}
