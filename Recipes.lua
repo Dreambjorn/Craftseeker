@@ -670,6 +670,28 @@ function CS:SeenObjectZones(objectID)
     return out
 end
 
+-- Zones an item is fished in: built-in ones (no count) and catches by us and other Craftseeker users;
+-- { zone, n = catches, own }, most catches first
+function CS:FishZones(itemID)
+    local own = self.data.sources[itemID] and self.data.sources[itemID].fish or {}
+    local times = {}
+    for _, uiMap in ipairs(self.BUILTIN_FISH and self.BUILTIN_FISH[itemID] or {}) do
+        local zone = MapName(uiMap)
+        if zone then times[zone] = 0 end
+    end
+    for zone, n in pairs(own) do times[zone] = (times[zone] or 0) + n end
+    for _, peer in pairs(self.data.shared) do
+        for zone, n in pairs(peer.fish and peer.fish[itemID] or {}) do times[zone] = (times[zone] or 0) + n end
+    end
+    local out = {}
+    for zone, n in pairs(times) do out[#out + 1] = { zone = zone, n = n, own = own[zone] or 0 } end
+    table.sort(out, function(a, b)
+        if a.n ~= b.n then return a.n > b.n end
+        return a.zone < b.zone
+    end)
+    return out
+end
+
 -- Vendor prices players saw for an item: [npc] = { copper per stack, stack, name? }, ours over other users', and ours
 function CS:SeenPrices(itemID)
     local own = self.data.prices[itemID] or {}

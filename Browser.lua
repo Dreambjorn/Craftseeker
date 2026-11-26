@@ -799,6 +799,26 @@ local function AddGathering(itemID, rates)
     return true
 end
 
+-- Zones an item was fished in, ours and other users' catches; casts aren't counted, so there is no rate
+local function AddFishing(itemID)
+    local list = Keep(CS:FishZones(itemID), function(z) return Passes({ z.zone }) end)
+    if #list == 0 then return false end
+    local columns = { { function(z) return Lower(z.zone) end }, nil, nil, { function(z) return z.n end, true } }
+    ApplySort(list, "fishing", columns)
+    local rows = {}
+    for i = 1, math.min(#list, TableLimit("fishing")) do
+        local z = list[i]
+        local tip = { z.zone, z.n > 0 and ("Caught here %d time%s"):format(z.n, z.n == 1 and "" or "s")
+            or "Known fishing zone, no catches counted yet" }
+        if z.n > 0 then tip[3] = z.own > 0 and ("%d of those are your own"):format(z.own) or "All counted by other players" end
+        rows[#rows + 1] = { cells = { ZoneCell({ z.zone }), "", "", z.n > 0 and tostring(z.n) or (GREY .. "none yet|r"), "" },
+            tip = tip }
+    end
+    AddHeading(("Fished in %d zone%s"):format(#list, #list == 1 and "" or "s"), "fishing")
+    AddTable({ "Zone", "", "", "Caught", "" }, rows, SOURCE_COLUMNS, "fishing", "sources", #list, columns)
+    return true
+end
+
 -- Every creature that drops an item, best measured rate first, then this zone's, then by name; nothing is cut. heading
 -- formats the count ("Recipe dropped by %d creature%s" when nil); key names the table
 local function AddDrops(itemID, qs, heading, key, rates)
@@ -1281,8 +1301,8 @@ function AddReagents(rec)
     end
 end
 
--- Where to get an item: the source switches, then vendors with prices, creatures with drop rates, gathering and
--- objects, then what this account has seen
+-- Where to get an item: the source switches, then vendors with prices, creatures with drop rates, gathering,
+-- fishing and objects, then what this account has seen
 -- Creatures drop or are skinned for the item: only then does the level switch have anything to hide
 local function HasCreatures(qs, drops, gathers)
     if (qs and qs.drops and #qs.drops > 0) or drops then return true end
@@ -1324,6 +1344,7 @@ local function AddWhereToGet(itemID, makersShown)
     any = AddVendors(itemID, qs, "Sold by %d vendor%s") or any
     any = AddDrops(itemID, qs, "Drops from %d creature%s", "reagentDrops", drops) or any
     any = AddGathering(itemID, gathers) or any
+    any = AddFishing(itemID) or any
     any = AddObjects(itemID, qs, "Looted from", "reagentObjects", gathers) or any
     local filtered = sourceFilter ~= nil
     sourceFilter = nil

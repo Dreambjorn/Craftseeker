@@ -79,9 +79,6 @@ function CS:SourceLines(itemID, limit)
         if s.gather then
             for _, t in ipairs(TopEntries(s.gather, limit, function(k) return k end)) do lines[#lines + 1] = { "Gathered", t } end
         end
-        if s.fish then
-            for _, t in ipairs(TopEntries(s.fish, limit, function(k) return k end)) do lines[#lines + 1] = { "Fished", t } end
-        end
         if s.loot then
             -- older records keep "NPC #id" when no name was known then; name and merge them now when possible
             local loot = {}
