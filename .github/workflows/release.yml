@@ -13,7 +13,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      CF_PROJECT_ID: "1828748"
+      CF_PROJECT_ID: ${{ vars.CF_PROJECT_ID }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
       WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
 
       # The packager's CurseForge upload can't take the HTML notes, so this one is done here
       - name: Upload to CurseForge
-        if: env.CF_API_TOKEN != ''
+        if: env.CF_API_TOKEN != '' && env.CF_PROJECT_ID != ''
         run: |
           api=https://wow.curseforge.com/api
           game=$(curl -fsS -H "X-Api-Token: $CF_API_TOKEN" "$api/game/versions" | jq --arg i "$INTERFACE" \
