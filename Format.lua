@@ -32,6 +32,28 @@ function CS:RecipeLine(recipeID, reagentID)
     return (rec.p or "?"), text, right, self.SKILL_ATLAS[diff or ""]
 end
 
+-- Sorts list in place by get(entry); entries without a value go last, ties keep their order (table.sort isn't stable)
+function CS.SortBy(list, get, descending)
+    local value, pos = {}, {}
+    for i, e in ipairs(list) do value[e], pos[e] = get(e), i end
+    table.sort(list, function(a, b)
+        local x, y = value[a], value[b]
+        if x ~= y then
+            if x == nil or y == nil then return y == nil end
+            if descending then return x > y end
+            return x < y
+        end
+        return pos[a] < pos[b]
+    end)
+end
+
+-- A level text ("12" or "10-12") as lowest and highest level
+function CS.LevelRange(level)
+    local lo, hi = tostring(level or ""):match("^(%d+)%-?(%d*)$")
+    lo = tonumber(lo)
+    return lo, tonumber(hi) or lo
+end
+
 -- Sorted "key: value" lines for a source bucket
 local function TopEntries(bucket, limit, fmt)
     local list = {}

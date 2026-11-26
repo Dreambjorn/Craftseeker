@@ -357,8 +357,18 @@ local function SetPin(pin, name)
         name or "?", info.name, x * 100, y * 100))
 end
 
--- One table row: columns are { text, width, justify }; tip is shown on hover
-local function AddRow(columns, tip, font, onClick)
+-- The column under the mouse, for clicks on a table's header
+local function ColumnAt(row)
+    local x = GetCursorPosition() / row:GetEffectiveScale() - row:GetLeft()
+    for i, edge in ipairs(row.edges) do
+        if x < edge then return i end
+    end
+    return #row.edges
+end
+
+-- One table row: columns are { text, width, justify }; tip is shown on hover; onClick gets the clicked column.
+-- arrow = { column, reversed } marks a header's sorted column like the auction house does.
+local function AddRow(columns, tip, font, onClick, arrow)
     used.rows = used.rows + 1
     local row = pool.rows[used.rows]
     if not row then
@@ -368,15 +378,19 @@ local function AddRow(columns, tip, font, onClick)
         hl:SetAtlas("Professions_Recipe_Hover")
         hl:SetAllPoints()
         hl:SetAlpha(0.4)
-        row.cols = {}
+        row.cols, row.edges = {}, {}
+        row.Arrow = row:CreateTexture(nil, "OVERLAY")
+        row.Arrow:SetAtlas("auctionhouse-ui-sortarrow", true)
         row:SetScript("OnEnter", RowTooltip)
         row:SetScript("OnLeave", GameTooltip_Hide)
-        row:SetScript("OnClick", function(self) if self.onClick then self.onClick() end end)
+        row:SetScript("OnClick", function(self) if self.onClick then self.onClick(ColumnAt(self)) end end)
         pool.rows[used.rows] = row
     end
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", 0, cursor)
     row.tip, row.onClick = tip, onClick
+    wipe(row.edges)
+    row.Arrow:Hide()
     local x = 0
     for i, col in ipairs(columns) do
         local fs = row.cols[i]
@@ -393,8 +407,22 @@ local function AddRow(columns, tip, font, onClick)
         fs:SetText(col[1] or "")
         fs:Show()
         x = x + col[2]
+        row.edges[i] = x
     end
     for i = #columns + 1, #row.cols do row.cols[i]:Hide() end
+    local fs = arrow and row.cols[arrow[1]]
+    if fs then
+        -- beside the title's text: after it when left-aligned, before it when right-aligned
+        local w = math.min(fs:GetStringWidth(), fs:GetWidth())
+        row.Arrow:ClearAllPoints()
+        if columns[arrow[1]][3] == "RIGHT" then
+            row.Arrow:SetPoint("RIGHT", fs, "RIGHT", -(w + 3), 0)
+        else
+            row.Arrow:SetPoint("LEFT", fs, "LEFT", w + 3, 0)
+        end
+        if arrow[2] then row.Arrow:SetTexCoord(0, 1, 0, 1) else row.Arrow:SetTexCoord(0, 1, 1, 0) end
+        row.Arrow:Show()
+    end
     row:Show()
     cursor = cursor - ROW
 end
@@ -448,14 +476,54 @@ local function TableLimit(key)
     return expanded[key] or TABLE_ROWS
 end
 
-local function AddTable(header, rows, justify, key, group, total)
+-- Sortable columns of a source table: [column] = { function(entry) return value end, descending first }.
+-- The player's choice per table is kept across sessions; nil keeps the table's own order.
+local function SortChoice(key, columns)
+    local s = CS.data.settings.sorts[key]
+    local c = s and columns and columns[s[1]]
+    if c then return s[1], (c[2] == true) ~= (s[2] == true), c[1] end
+end
+
+local function ApplySort(list, key, columns)
+    local _, descending, get = SortChoice(key, columns)
+    if get then CS.SortBy(list, get, descending) end
+end
+
+-- A click on a column title sorts by it, a second reverses it, a third goes back to the table's own order
+local function ClickSort(key, column, columns)
+    if not (columns and columns[column]) then return end
+    local sorts = CS.data.settings.sorts
+    local s = sorts[key]
+    if not s or s[1] ~= column then
+        sorts[key] = { column, false }
+    elseif not s[2] then
+        s[2] = true
+    else
+        sorts[key] = nil
+    end
+    ShowDetail(true)
+end
+
+local SORT_TIP = { "Sort", "Click a column title to sort by it, again to reverse, a third time for the usual order" }
+
+local function Lower(text)
+    return text and text:lower()
+end
+
+local function AddTable(header, rows, justify, key, group, total, columns)
     total = total or #rows
     local shown = math.min(#rows, TableLimit(key))
     local need = {}
     local function Measure(cells, font)
         for i = 1, #cells do need[i] = math.max(need[i] or 0, math.ceil(TextWidth(cells[i], font)) + 13) end
     end
-    if header then Measure(header, "GameFontDisable") end
+    if header then
+        Measure(header, "GameFontDisable")
+        -- room for the sort arrow, so a column never widens when it is picked
+        for i in pairs(columns or {}) do
+            if header[i] and header[i] ~= "" then need[i] = need[i] + 12 end
+        end
+    end
     for i = 1, shown do Measure(rows[i].cells, "GameFontHighlight") end
     measure:SetText("") -- the alpha alone does not hide it
     if group then
@@ -476,7 +544,13 @@ local function AddTable(header, rows, justify, key, group, total)
         for i = 1, #widths do cols[i] = { cells[i] or "", widths[i], justify and justify[i] } end
         return cols
     end
-    if header then AddRow(Columns(header), nil, "GameFontDisable") end
+    if header and columns then
+        local column, descending = SortChoice(key, columns)
+        AddRow(Columns(header), SORT_TIP, "GameFontDisable", function(c) ClickSort(key, c, columns) end,
+            column and { column, descending })
+    elseif header then
+        AddRow(Columns(header), nil, "GameFontDisable")
+    end
     for i = 1, shown do
         local r = rows[i]
         local click
@@ -611,6 +685,9 @@ local function AddObjects(itemID, qs, heading, key, rates)
         if (a.chance or -1) ~= (b.chance or -1) then return (a.chance or -1) > (b.chance or -1) end
         return a.name < b.name
     end)
+    local columns = { { function(e) return Lower(e.name) end }, nil, { function(e) return Lower(e.zones[1]) end },
+        { function(e) return e.chance end, true }, { function(e) return e.chance and e.k end, true } }
+    ApplySort(list, key, columns)
     AddHeading(heading, "lootall")
     local rows = {}
     for i = 1, math.min(#list, TableLimit(key)) do
@@ -631,7 +708,7 @@ local function AddObjects(itemID, qs, heading, key, rates)
             e.chance and ("%s%.2f%%|r"):format(GOLD, e.chance) or (GREY .. "no data|r"),
             e.chance and ("%s(%d)|r"):format(GREY, e.k) or "" }, tip = tip, pin = e.pin }
     end
-    AddTable(nil, rows, SOURCE_COLUMNS, key, "sources", #list)
+    AddTable({ "Source", "", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, key, "sources", #list, columns)
     return true
 end
 
@@ -643,21 +720,38 @@ local function AddGathering(itemID, rates)
         if not IsLooted(g) then list[#list + 1] = g end
     end
     if #list == 0 then return false end
-    local rows = {}
-    for i = 1, math.min(#list, TableLimit("gathering")) do
-        local g, label, zones, pin = list[i], nil, nil, nil
+    -- a row's name and places; skinning lists hundreds of creatures, so only shown rows get them unless a sort
+    -- reads every row
+    local function Complete(g)
+        if g.label then return end
         if g.kind == "k" then
-            label = CS:NpcName(g.id) or CS:SeenNpcName(g.id) or ("NPC " .. g.id)
+            g.label = CS:NpcName(g.id) or CS:SeenNpcName(g.id) or ("NPC " .. g.id)
             local entry = { zones = CS:GetPlaces(g.id), npc = g.id }
             if #entry.zones == 0 then entry.zones = CS:NpcZones(g.id) or {} end
             FillSeen(entry, g.id)
-            zones, pin = entry.zones, entry.pin or CS:GetPin(g.id)
+            g.zones, g.pin = entry.zones, entry.pin or CS:GetPin(g.id)
         else
             local qname, qzones, qpin = CS:ObjectInfo(g.id)
-            label = qname or g.n or ("Object " .. g.id)
-            zones = qzones and #qzones > 0 and qzones or CS:SeenObjectZones(g.id)
-            pin = qpin or CS:SeenObjectPin(g.id)
+            g.label = qname or g.n or ("Object " .. g.id)
+            g.zones = qzones and #qzones > 0 and qzones or CS:SeenObjectZones(g.id)
+            g.pin = qpin or CS:SeenObjectPin(g.id)
         end
+    end
+    local columns = { { function(g) return Lower(g.label) end }, { function(g) return g.p end },
+        { function(g) return Lower(g.zones[1]) end }, { function(g) return g.chance end, true }, { function(g) return g.k end, true } }
+    local sortBy = SortChoice("gathering", columns)
+    if sortBy then
+        -- chance and count need nothing more; names and places do
+        if sortBy <= 3 then
+            for _, g in ipairs(list) do Complete(g) end
+        end
+        ApplySort(list, "gathering", columns)
+    end
+    local rows = {}
+    for i = 1, math.min(#list, TableLimit("gathering")) do
+        local g = list[i]
+        Complete(g)
+        local label, zones, pin = g.label, g.zones, g.pin
         local tip = { label .. (g.p and (" - " .. g.p) or ""),
             #zones > 0 and ("Zones: " .. table.concat(zones, ", ")) or "Zone not recorded",
             ("%.2f%% over %d times gathered"):format(g.chance, g.k) }
@@ -667,7 +761,7 @@ local function AddGathering(itemID, rates)
             ("%s(%d)|r"):format(GREY, g.k) }, tip = tip, pin = pin }
     end
     AddHeading(("Gathered from %d source%s"):format(#list, #list == 1 and "" or "s"), "mine")
-    AddTable({ "Source", "How", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources", #list)
+    AddTable({ "Source", "How", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, "gathering", "sources", #list, columns)
     return true
 end
 
@@ -703,16 +797,31 @@ local function AddDrops(itemID, qs, heading, key, rates)
         if ah ~= bh then return ah end
         return a.name < b.name
     end)
-    AddHeading((heading or "Recipe dropped by %d creature%s"):format(#list, #list == 1 and "" or "s"), "attack")
-    -- rows past the table's fold aren't built: a reagent can drop from hundreds of creatures, redrawn on every loot
-    local rows = {}
-    for i = 1, math.min(#list, TableLimit(key or "drops")) do
-        local e = list[i]
+    local function Complete(e)
         if not e.level then
             local level, rank = CS:NpcLevel(e.npc)
             e.level, e.rank = level, e.rank or rank
         end
         FillSeen(e, e.npc)
+    end
+    key = key or "drops"
+    local columns = { { function(e) return Lower(e.name) end }, { function(e) return (CS.LevelRange(e.level)) end },
+        { function(e) return Lower(e.zones[1]) end }, { function(e) return e.chance end, true },
+        { function(e) return e.chance and e.kills end, true } }
+    -- rows past the table's fold aren't built: a reagent can drop from hundreds of creatures, redrawn on every loot;
+    -- a level or zone sort needs every row's level and places, so only then are all completed
+    local sortBy = SortChoice(key, columns)
+    if sortBy then
+        if sortBy == 2 or sortBy == 3 then
+            for _, e in ipairs(list) do Complete(e) end
+        end
+        ApplySort(list, key, columns)
+    end
+    AddHeading((heading or "Recipe dropped by %d creature%s"):format(#list, #list == 1 and "" or "s"), "attack")
+    local rows = {}
+    for i = 1, math.min(#list, TableLimit(key)) do
+        local e = list[i]
+        Complete(e)
         local name = e.rank and (e.name .. GOLD .. " " .. e.rank .. "|r") or e.name
         -- rate and corpse count in their own right-aligned columns, so digits and % signs line up
         local chance = e.chance and ("%s%.2f%%|r"):format(GOLD, e.chance) or (GREY .. "no data|r")
@@ -726,7 +835,7 @@ local function AddDrops(itemID, qs, heading, key, rates)
         if e.own and e.own > 0 then tip[#tip + 1] = ("%d of those corpses are your own"):format(e.own) end
         rows[#rows + 1] = { cells = { name, e.level and tostring(e.level) or "", ZoneCell(e.zones), chance, corpses }, tip = tip, pin = e.pin }
     end
-    AddTable({ "Creature", "Level", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, key or "drops", "sources", #list)
+    AddTable({ "Creature", "Level", "Zone", "Chance", "" }, rows, SOURCE_COLUMNS, key, "sources", #list, columns)
     return true
 end
 
@@ -735,7 +844,8 @@ local function AddVendors(itemID, qs, heading)
     local byNpc, list = {}, {}
     for _, v in ipairs(CS:GetVendors(itemID) or {}) do
         local price = v.copper and v.copper > 0 and (Money(v.copper) .. (v.stack and v.stack > 1 and (GREY .. " /" .. v.stack .. "|r") or "")) or ""
-        local entry = { name = v.name, zones = v.zone and { v.zone } or {}, price = price, pin = v.pin }
+        local entry = { name = v.name, zones = v.zone and { v.zone } or {}, price = price, pin = v.pin,
+            unit = v.copper and v.copper > 0 and v.copper / (v.stack or 1) or nil }
         byNpc[v.npc] = entry
         list[#list + 1] = entry
     end
@@ -764,6 +874,7 @@ local function AddVendors(itemID, qs, heading)
         end
         if entry and entry.price == "" then
             entry.price = Money(p[1]) .. (p[2] > 1 and (GREY .. " /" .. p[2] .. "|r") or "")
+            entry.unit = p[1] > 0 and p[1] / p[2] or nil
         end
     end
     if #list == 0 then return false end
@@ -772,13 +883,17 @@ local function AddVendors(itemID, qs, heading)
         FillSeen(entry, npc)
     end
     table.sort(list, function(a, b) return a.name < b.name end)
+    local key = heading and "buy" or "vendors"
+    local columns = { { function(v) return Lower(v.name) end }, nil, { function(v) return Lower(v.zones[1]) end },
+        { function(v) return v.unit end } }
+    ApplySort(list, key, columns)
     AddHeading((heading or "Recipe sold by %d vendor%s"):format(#list, #list == 1 and "" or "s"), "buy")
     local rows = {}
     for _, v in ipairs(list) do
         rows[#rows + 1] = { cells = { v.name, "", ZoneCell(v.zones), v.price, "" },
             tip = { v.name, #v.zones > 0 and ("Zones: " .. table.concat(v.zones, ", ")) or "Zone not recorded" }, pin = v.pin }
     end
-    AddTable(nil, rows, SOURCE_COLUMNS, heading and "buy" or "vendors", "sources")
+    AddTable({ "Vendor", "", "Zone", "Price", "" }, rows, SOURCE_COLUMNS, key, "sources", nil, columns)
     return true
 end
 
@@ -1207,6 +1322,7 @@ function DrawDetail(keep)
         AddText("Click an item to see what it's used in.")
         AddText("Right-click an item to see how it's made.")
         AddText("Right-click a recipe to favorite or track it.")
+        AddText("Click a column title to sort a table.")
         AddText("Click a vendor, trainer or creature to pin it on your map.")
         AddSection("Legend")
         AddText("|A:Professions-Icon-Skill-High:15:13|a  Guaranteed skill-up")
