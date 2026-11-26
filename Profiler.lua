@@ -393,6 +393,13 @@ local function Build()
     box:SetFontObject("GameFontHighlight")
     box:SetWidth(CONTENT_W)
     box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    -- for copying only: any typing, cutting or pasting puts the report back
+    box:SetScript("OnTextChanged", function(self, userInput)
+        if userInput and self.report then
+            self:SetText(self.report)
+            self:HighlightText()
+        end
+    end)
     copy:SetScrollChild(box)
     ScrollUtil.InitScrollFrameWithScrollBar(copy, copyBar)
     copy:Hide()
@@ -462,7 +469,8 @@ function Profiler:ShowReport(on)
         return self:Refresh()
     end
     local lines = self:ReportLines()
-    win.CopyBox:SetText(table.concat(lines, "\n"))
+    win.CopyBox.report = table.concat(lines, "\n")
+    win.CopyBox:SetText(win.CopyBox.report)
     win.CopyBox:SetHeight(#lines * 30 + 20) -- long lines wrap, so room for two each
     win.CopyBox:SetFocus()
     win.CopyBox:HighlightText()
