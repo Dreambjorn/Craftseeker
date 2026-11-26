@@ -323,6 +323,16 @@ function Profiler:Refresh()
     content:SetHeight(-cursor + 10)
 end
 
+-- One short line under a button; text may be a function, for buttons whose job changes
+local function ButtonTip(button, text)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip_AddHighlightLine(GameTooltip, type(text) == "function" and text() or text)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", GameTooltip_Hide)
+end
+
 local function Build()
     win = CreateFrame("Frame", "CraftseekerProfiler", UIParent, "PortraitFrameTemplate")
     win:SetSize(W, 560)
@@ -353,11 +363,15 @@ local function Build()
     toggle:SetPoint("TOPRIGHT", -14, -38)
     toggle:SetScript("OnClick", function() Profiler:Toggle() end)
     win.Toggle = toggle
+    ButtonTip(toggle, function()
+        return Profiler.active and "Stop measuring and save the report" or "Measure again from now"
+    end)
     local clean = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
     clean:SetSize(BUTTON_W, 22)
     clean:SetPoint("RIGHT", toggle, "LEFT", -6, 0)
     clean:SetText("Clean up")
     win.Clean = clean
+    ButtonTip(clean, "Clear garbage to show the real memory size")
     -- a full collection stalls a frame, so it runs only on request
     clean:SetScript("OnClick", function()
         collectgarbage("collect")
@@ -424,6 +438,7 @@ local function Build()
         Profiler:ShowReport(not win.Copy:IsShown())
     end)
     win.ReportButton = report
+    ButtonTip(report, function() return win.Copy:IsShown() and "Back to the tables" or "The report as text, to copy" end)
 
     -- the heading stops short of the buttons, so a long status never runs under them
     local title = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge2")
