@@ -23,9 +23,10 @@ local defaults = {
         items = {},                -- [character] = { bags = { [itemID] = n }, bank = { [itemID] = n } }
         bridges = { dt = {}, fd = {}, dtSkins = {} },  -- other loot addons' counts: dt, dtSkins [npc][install], fd [player id]
         -- hidden: [profession] = true; dt, fd: read those addons' counts; opposite: list the other faction's recipes;
-        -- unconfirmed: list recipes no player has seen on Forever yet; sorts: [table] = { column, reversed }
+        -- unconfirmed: list recipes no player has seen on Forever yet; sorts: [table] = { column, reversed };
+        -- zoneOnly, nearLevel: the reagent source switches
         settings = { share = true, hidden = {}, dt = true, fd = true, opposite = false, unconfirmed = false, filters = {},
-            tooltip = true, debug = false, sorts = {} },
+            tooltip = true, debug = false, sorts = {}, zoneOnly = false, nearLevel = false },
         minimap = { hide = false },  -- LibDBIcon's button position and visibility
         unreachable = {},            -- [name] = time(): a whisper found them offline or on the other faction
     },

@@ -506,6 +506,36 @@ end
 
 local SORT_TIP = { "Sort", "Click a column title to sort by it, again to reverse, a third time for the usual order" }
 
+-- The reagent sources' switches: only the player's zone, only creatures within NEAR_LEVELS of the player's level.
+-- Set while those tables draw; a creature of unknown level stays listed.
+local NEAR_LEVELS = 5
+local sourceFilter
+
+local function Passes(zones, level)
+    if not sourceFilter then return true end
+    if sourceFilter.zone then
+        local here = false
+        for _, z in ipairs(zones or {}) do
+            if z == sourceFilter.zone then here = true end
+        end
+        if not here then return false end
+    end
+    local lo, hi = CS.LevelRange(level)
+    if sourceFilter.level and lo then
+        return hi >= sourceFilter.level - NEAR_LEVELS and lo <= sourceFilter.level + NEAR_LEVELS
+    end
+    return true
+end
+
+local function Keep(list, test)
+    if not sourceFilter then return list end
+    local out = {}
+    for _, e in ipairs(list) do
+        if test(e) then out[#out + 1] = e end
+    end
+    return out
+end
+
 local function Lower(text)
     return text and text:lower()
 end
@@ -685,6 +715,8 @@ local function AddObjects(itemID, qs, heading, key, rates)
         if (a.chance or -1) ~= (b.chance or -1) then return (a.chance or -1) > (b.chance or -1) end
         return a.name < b.name
     end)
+    list = Keep(list, function(e) return Passes(e.zones) end)
+    if #list == 0 then return false end
     local columns = { { function(e) return Lower(e.name) end }, nil, { function(e) return Lower(e.zones[1]) end },
         { function(e) return e.chance end, true }, { function(e) return e.chance and e.k end, true } }
     ApplySort(list, key, columns)
@@ -720,16 +752,16 @@ local function AddGathering(itemID, rates)
         if not IsLooted(g) then list[#list + 1] = g end
     end
     if #list == 0 then return false end
-    -- a row's name and places; skinning lists hundreds of creatures, so only shown rows get them unless a sort
-    -- reads every row
+    -- a row's name, places and level; skinning lists hundreds of creatures, so only shown rows get them unless the
+    -- switches or a sort read every row
     local function Complete(g)
         if g.label then return end
         if g.kind == "k" then
             g.label = CS:NpcName(g.id) or CS:SeenNpcName(g.id) or ("NPC " .. g.id)
-            local entry = { zones = CS:GetPlaces(g.id), npc = g.id }
+            local entry = { zones = CS:GetPlaces(g.id), npc = g.id, level = CS:NpcLevel(g.id) }
             if #entry.zones == 0 then entry.zones = CS:NpcZones(g.id) or {} end
             FillSeen(entry, g.id)
-            g.zones, g.pin = entry.zones, entry.pin or CS:GetPin(g.id)
+            g.zones, g.pin, g.level = entry.zones, entry.pin or CS:GetPin(g.id), entry.level
         else
             local qname, qzones, qpin = CS:ObjectInfo(g.id)
             g.label = qname or g.n or ("Object " .. g.id)
@@ -740,11 +772,13 @@ local function AddGathering(itemID, rates)
     local columns = { { function(g) return Lower(g.label) end }, { function(g) return g.p end },
         { function(g) return Lower(g.zones[1]) end }, { function(g) return g.chance end, true }, { function(g) return g.k end, true } }
     local sortBy = SortChoice("gathering", columns)
-    if sortBy then
-        -- chance and count need nothing more; names and places do
-        if sortBy <= 3 then
+    if sourceFilter or sortBy then
+        -- chance and count need nothing more; names, places and levels do
+        if sourceFilter or sortBy <= 3 then
             for _, g in ipairs(list) do Complete(g) end
         end
+        list = Keep(list, function(g) return Passes(g.zones, g.level) end)
+        if #list == 0 then return false end
         ApplySort(list, "gathering", columns)
     end
     local rows = {}
@@ -809,12 +843,14 @@ local function AddDrops(itemID, qs, heading, key, rates)
         { function(e) return Lower(e.zones[1]) end }, { function(e) return e.chance end, true },
         { function(e) return e.chance and e.kills end, true } }
     -- rows past the table's fold aren't built: a reagent can drop from hundreds of creatures, redrawn on every loot;
-    -- a level or zone sort needs every row's level and places, so only then are all completed
+    -- the switches and a level or zone sort need every row's level and places, so only then are all completed
     local sortBy = SortChoice(key, columns)
-    if sortBy then
-        if sortBy == 2 or sortBy == 3 then
+    if sourceFilter or sortBy then
+        if sourceFilter or sortBy == 2 or sortBy == 3 then
             for _, e in ipairs(list) do Complete(e) end
         end
+        list = Keep(list, function(e) return Passes(e.zones, e.level) end)
+        if #list == 0 then return false end
         ApplySort(list, key, columns)
     end
     AddHeading((heading or "Recipe dropped by %d creature%s"):format(#list, #list == 1 and "" or "s"), "attack")
@@ -883,6 +919,8 @@ local function AddVendors(itemID, qs, heading)
         FillSeen(entry, npc)
     end
     table.sort(list, function(a, b) return a.name < b.name end)
+    list = Keep(list, function(v) return Passes(v.zones) end)
+    if #list == 0 then return false end
     local key = heading and "buy" or "vendors"
     local columns = { { function(v) return Lower(v.name) end }, nil, { function(v) return Lower(v.zones[1]) end },
         { function(v) return v.unit end } }
@@ -1158,6 +1196,29 @@ local function BuildDetail(panel)
         Render(true)
     end)
     detail.Track = track
+
+    -- the reagent sources' switches, placed in the flow above the source tables
+    local function Switch(setting, tip)
+        local box = CreateFrame("CheckButton", nil, content, "CheckboxWithLabelTemplate")
+        box:SetSize(24, 24)
+        box:SetScript("OnClick", function(self)
+            CS.data.settings[setting] = self:GetChecked()
+            ShowDetail(true)
+        end)
+        box:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip_AddHighlightLine(GameTooltip, tip())
+            GameTooltip:Show()
+        end)
+        box:SetScript("OnLeave", GameTooltip_Hide)
+        return box
+    end
+    detail.ZoneOnly = Switch("zoneOnly", function()
+        return "Only sources in " .. (GetRealZoneText() or "this zone") .. ", where you are now"
+    end)
+    detail.NearLevel = Switch("nearLevel", function()
+        return ("Only creatures within %d levels of yours; those of unknown level stay listed"):format(NEAR_LEVELS)
+    end)
 end
 
 local function ResetDetail()
@@ -1173,6 +1234,8 @@ local function ResetDetail()
     detail.Sub:SetText("")
     detail.Favorite:Hide()
     detail.Track:Hide()
+    detail.ZoneOnly:Hide()
+    detail.NearLevel:Hide()
 end
 
 -- keep: a redraw of the same recipe (show-more, new bag counts, a list refresh) stays where the reader is
@@ -1218,12 +1281,38 @@ function AddReagents(rec)
     end
 end
 
--- Where to get an item: vendors with prices, creatures with drop rates, gathering and objects, then what this
--- account has seen
+-- Where to get an item: the source switches, then vendors with prices, creatures with drop rates, gathering and
+-- objects, then what this account has seen
+-- Creatures drop or are skinned for the item: only then does the level switch have anything to hide
+local function HasCreatures(qs, drops, gathers)
+    if (qs and qs.drops and #qs.drops > 0) or drops then return true end
+    for _, g in ipairs(gathers or {}) do
+        if g.kind == "k" then return true end
+    end
+    return false
+end
+
 local function AddWhereToGet(itemID, makersShown)
     local qs = CS:GetItemSources(itemID)
+    local settings = CS.data.settings
     -- rates are built once here; the tables take them (false: none)
     local drops, gathers = CS:GetDropRates(itemID) or false, CS:GetGatherRates(itemID) or false
+    local creatures = HasCreatures(qs, drops, gathers)
+    cursor = cursor - 4
+    local top = cursor
+    detail.ZoneOnly.Text:SetText(LIGHTGRAY_FONT_COLOR:WrapTextInColorCode("This zone only"))
+    detail.NearLevel.Text:SetText(LIGHTGRAY_FONT_COLOR:WrapTextInColorCode("Creatures near your level"))
+    detail.ZoneOnly:SetChecked(settings.zoneOnly)
+    detail.NearLevel:SetChecked(settings.nearLevel)
+    detail.ZoneOnly:SetPoint("TOPLEFT", 0, cursor)
+    detail.NearLevel:SetPoint("TOPLEFT", DETAIL_W / 2, cursor)
+    detail.ZoneOnly:Show()
+    detail.NearLevel:SetShown(creatures)
+    cursor = cursor - 28
+    local zone = settings.zoneOnly and GetRealZoneText() or nil
+    if zone == "" then zone = nil end
+    local level = creatures and settings.nearLevel and UnitLevel("player") or nil
+    sourceFilter = (zone or level) and { zone = zone, level = level } or nil
     local any = false
     local makers = not makersShown and CS:GetMakers(itemID)
     if makers then
@@ -1236,14 +1325,25 @@ local function AddWhereToGet(itemID, makersShown)
     any = AddDrops(itemID, qs, "Drops from %d creature%s", "reagentDrops", drops) or any
     any = AddGathering(itemID, gathers) or any
     any = AddObjects(itemID, qs, "Looted from", "reagentObjects", gathers) or any
+    local filtered = sourceFilter ~= nil
+    sourceFilter = nil
+    -- this account's own records name the zone in brackets, so the zone switch reads it there
     local seen = {}
     for _, l in ipairs(CS:SourceLines(itemID, 50)) do
-        seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
+        if not zone or l[2]:find("(" .. zone .. ")", 1, true) then
+            seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
+        end
     end
     if #seen > 0 then
         AddHeading("Where you found it", "inspect")
         AddTable(nil, seen, { nil, "RIGHT" }, "seen")
+    elseif not any and filtered then
+        AddText(GREY .. "No source matches the switches above.|r")
     elseif not any then
+        -- nothing to filter: the switches go and the note takes their place
+        detail.ZoneOnly:Hide()
+        detail.NearLevel:Hide()
+        cursor = top
         AddText(GREY .. "No source recorded yet.|r")
     end
 end
