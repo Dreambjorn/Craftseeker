@@ -60,6 +60,7 @@ local function ShowItemTooltip(self)
             GameTooltip:AddLine(bags > 0 and ("%d in your bags, %d in your bank"):format(bags, bank)
                 or ("%d in your bank"):format(bank), 0.8, 0.8, 0.8)
         end
+        if self.cheapest then GameTooltip:AddLine(self.cheapest, 1, 0.82, 0, true) end
         if CS:GetMakers(self.itemID) then GameTooltip_AddInstructionLine(GameTooltip, "Right-click to see how it's made") end
     end
     GameTooltip:Show()
@@ -199,6 +200,7 @@ local function InitRow(row, data)
     end
     row.itemID, row.lookup, row.recipeID, row.spellID, row.page = data.itemID, data.lookup, data.recipeID, data.spellID,
         data.page == true
+    row.cheapest = data.cheapest or false
     row.Label:SetText(data.left or "")
     row.Right:SetText(data.right or "")
     row.Label:ClearPoint("LEFT")
@@ -1705,13 +1707,37 @@ local function ReagentSection(list, title, ids)
     list[#list + 1] = { spacer = true }
 end
 
--- Favorites, tracked recipes, then the reagents this character carries; the bank's own section says where they are
+-- What the tracked recipes still need for one craft each; the tooltip names the cheapest vendor
+local function ShoppingSection(list)
+    local rows = {}
+    for _, e in ipairs(CS:ShoppingList()) do
+        local itemID, missing = e[1], e[2]
+        local vendor, unit, zone = CS:CheapestVendor(itemID)
+        rows[#rows + 1] = {
+            itemID = itemID, lookup = itemID, icon = C_Item.GetItemIconByID(itemID),
+            left = CS:ItemName(itemID) or ("item " .. itemID), right = missing .. " more",
+            cheapest = vendor and ("Cheapest vendor: %s, %s each%s"):format(vendor, CS.Money(math.max(1, math.floor(unit + 0.5))),
+                zone and (", " .. zone) or ""),
+        }
+    end
+    if #rows == 0 then return end
+    table.sort(rows, function(a, b) return a.left < b.left end)
+    local key = "Shopping list"
+    list[#list + 1] = { header = true, key = key, text = key .. "  " .. GREY .. #rows .. "|r" }
+    if collapsed[key] then return end
+    for _, row in ipairs(rows) do list[#list + 1] = row end
+    list[#list + 1] = { spacer = true }
+end
+
+-- Favorites, tracked recipes and what they still need, then the reagents this character carries; the bank's own
+-- section says where they are
 local function WelcomeView()
     SetHeading(nil, "Look up an item or recipe", ("%d recipes across every profession"):format(CS:CountRecipes()))
     local list, favorites = {}, {}
     for id in pairs(CS.data.favorites) do favorites[#favorites + 1] = id end
     RecipeSection(list, "Favorites", favorites)
     RecipeSection(list, "Tracked", CS:TrackedRecipes())
+    ShoppingSection(list)
     local mine = CS.data.items[CS.CharKey()] or {}
     local bags, bank = {}, {}
     for itemID in pairs(mine.bags or {}) do bags[#bags + 1] = itemID end

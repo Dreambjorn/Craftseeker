@@ -108,6 +108,23 @@ function CS:ItemCounts(itemID)
     return have, alts, bank
 end
 
+-- Reagents the tracked recipes still need for one craft each, bags and bank counted: { { itemID, missing }, ... }
+function CS:ShoppingList()
+    local need = {}
+    for _, id in ipairs(self:TrackedRecipes()) do
+        local rec = self.recipes[id]
+        for _, r in ipairs(rec and rec.r or {}) do
+            if not r[3] then need[r[1]] = (need[r[1]] or 0) + r[2] end
+        end
+    end
+    local out = {}
+    for itemID, n in pairs(need) do
+        local have = self:ItemCounts(itemID)
+        if have < n then out[#out + 1] = { itemID, n - have } end
+    end
+    return out
+end
+
 function Inventory:OnEnable()
     self:RegisterEvent("BANKFRAME_OPENED")
     self:RegisterEvent("BANKFRAME_CLOSED")

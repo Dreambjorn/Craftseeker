@@ -692,6 +692,21 @@ function CS:FishZones(itemID)
     return out
 end
 
+-- The cheapest vendor this character can buy an item from, by price per item: name, copper per item, zone
+function CS:CheapestVendor(itemID)
+    local best
+    local function Take(name, copper, stack, zone)
+        local unit = copper and copper > 0 and copper / (stack or 1)
+        if unit and (not best or unit < best[2]) then best = { name, unit, zone } end
+    end
+    for _, v in ipairs(self:GetVendors(itemID) or {}) do Take(v.name, v.copper, v.stack, v.zone) end
+    -- vendors we visited ourselves sell to our faction
+    for npc, p in pairs(self.data.prices[itemID] or {}) do
+        Take(p[3] or self:NpcName(npc) or ("NPC " .. npc), p[1], p[2], self:GetPlaces(npc)[1])
+    end
+    if best then return best[1], best[2], best[3] end
+end
+
 -- Vendor prices players saw for an item: [npc] = { copper per stack, stack, name? }, ours over other users', and ours
 function CS:SeenPrices(itemID)
     local own = self.data.prices[itemID] or {}
