@@ -410,7 +410,11 @@ local function Build()
     report:SetSize(BUTTON_W, 22)
     report:SetPoint("RIGHT", clean, "LEFT", -6, 0)
     report:SetText("Report")
-    report:SetScript("OnClick", function() Profiler:ShowReport(not win.Copy:IsShown()) end)
+    -- the report needs the panel, so a minimized window opens up first
+    report:SetScript("OnClick", function()
+        if win.minimized then win.Size:Maximize() end
+        Profiler:ShowReport(not win.Copy:IsShown())
+    end)
     win.ReportButton = report
 
     -- the heading stops short of the buttons, so a long status never runs under them
@@ -443,6 +447,7 @@ local function Build()
     size:SetPoint("RIGHT", win.CloseButton, "LEFT", 0, 0)
     size:SetOnMinimizedCallback(function() Profiler:SetMinimized(true) end)
     size:SetOnMaximizedCallback(function() Profiler:SetMinimized(false) end)
+    win.Size = size
 end
 
 -- The top edge stays put while the window grows or shrinks under it
@@ -450,10 +455,9 @@ function Profiler:SetMinimized(on)
     local left, top = win:GetLeft(), win:GetTop()
     win:ClearAllPoints()
     win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
-    win:SetHeight(on and 76 or 560)
+    win:SetHeight(on and 120 or 560) -- shorter, the portrait corner's art runs into the bottom corner's
+    win.minimized = on
     win.Panel:SetShown(not on)
-    win.Clean:SetShown(not on)
-    win.ReportButton:SetShown(not on)
     if on and win.Copy:IsShown() then self:ShowReport(false) end
 end
 
