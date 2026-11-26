@@ -1,0 +1,9 @@
+# Commits left out of the release notes: the commit hash, then its subject as a reminder.
+# Readme, licence, credit and version commits are left out without being listed here.
+129f116 Add the profession window's recipe categories
+a8b2cc3 Add category, tracking and filter lookups
+a608e5c Rename modules after what they do
+098e75e Regenerate the recipe data
+4df2c7b Remove the throttle error diagnostics
+712cd67 Move misplaced function comments
+be9a1a0 Add containers to the recipe data
