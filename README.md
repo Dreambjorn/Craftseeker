@@ -43,6 +43,8 @@ Drop rates improve as you play. Every loot, gathered node and catch is counted a
 
 <img alt="Zones a fish is caught in" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/fishing-zones.webp" />
 
+---
+
 Reagents in your bags and bank get one tooltip line saying how many recipes use them.
 
 <img alt="The one line Craftseeker adds to a reagent's tooltip" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/tooltip.webp" />
@@ -64,6 +66,7 @@ With [QuestieDB](https://github.com/Questie/QuestieDB) installed, Craftseeker al
 - ` /cs stats ` — What's been learned so far
 - ` /cs profiler ` — Open the profiler
 - ` /cs reset ` — Wipe learned data; keeps favorites and settings
+
 ---
 
 ## FAQ
