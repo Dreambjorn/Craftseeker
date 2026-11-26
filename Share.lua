@@ -328,16 +328,27 @@ function Share:FriendsChanged()
     online = now
 end
 
+-- Encoded replies by kind while countsStamp holds; one built within the stamp's own second may miss later news
+local built = {}
+
+function Share:ForgetReplies()
+    wipe(built)
+end
+
 -- Data goes out compressed ("Z") to peers that said they read it, plain ("D") to older versions
 function Share:SendData(chatType, target, compressed)
-    local data = self:Serialize()
-    local kind = "D"
-    if compressed then
-        data = Deflate:EncodeForWoWAddonChannel(Deflate:CompressDeflate(data))
-        kind = "Z"
+    local kind = compressed and "Z" or "D"
+    local stamp = CS.data.countsStamp or 0
+    local reply = built[kind]
+    if not (reply and reply.stamp == stamp and reply.at > stamp) then
+        local data = self:Serialize()
+        if compressed then data = Deflate:EncodeForWoWAddonChannel(Deflate:CompressDeflate(data)) end
+        reply = { stamp = stamp, at = time(), data = data }
+        built[kind] = reply
     end
+    local data = reply.data
     local n = math.max(1, math.ceil(#data / CHUNK))
-    local head = kind .. VERSION .. "," .. CS.data.install .. "," .. (CS.data.countsStamp or 0) .. ","
+    local head = kind .. VERSION .. "," .. CS.data.install .. "," .. stamp .. ","
     for i = 1, n do
         Send(chatType, target, head .. i .. "," .. n .. "," .. data:sub((i - 1) * CHUNK + 1, i * CHUNK), "BULK")
     end

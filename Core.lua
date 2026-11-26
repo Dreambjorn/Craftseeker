@@ -128,6 +128,7 @@ function CS:SlashCommand(input)
     elseif cmd == "reset" then
         wipe(data.recipes); wipe(data.known); wipe(data.sources); wipe(data.verified); wipe(data.counts); wipe(data.shared); wipe(data.prices); wipe(data.objects); wipe(data.objectPins); wipe(data.npcs); wipe(data.gather.k); wipe(data.gather.g); wipe(data.gather.c); wipe(data.quests); wipe(data.proven)
         wipe(data.bridges.dt); wipe(data.bridges.fd); wipe(data.bridges.dtSkins)
+        self:GetModule("Share"):ForgetReplies() -- the stamp stays, so cached replies would still hold wiped data
         self:CountsChanged()
         self:KnownChanged()
         self:RebuildIndex()
