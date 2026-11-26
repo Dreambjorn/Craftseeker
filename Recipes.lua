@@ -1043,3 +1043,24 @@ function CS:SearchReagentsByName(text)
     table.sort(hits, function(a, b) return names[a] < names[b] end)
     return hits, uses
 end
+
+-- Recipe items (patterns, plans, schematics...) whose name contains the search text: itemIDs, and the profession each
+-- teaches for
+function CS:SearchRecipeItemsByName(text)
+    text = text:lower()
+    local hits, names, profs = {}, {}, {}
+    for itemID in pairs(self.recipeItems) do
+        local name = self:ItemName(itemID)
+        if not name then
+            C_Item.RequestLoadItemDataByID(itemID)
+        elseif Lower(itemID, name):find(text, 1, true) then
+            local taught = self:GetTaught(itemID)
+            if taught then
+                hits[#hits + 1] = itemID
+                names[itemID], profs[itemID] = name, self.recipes[taught[1]].p
+            end
+        end
+    end
+    table.sort(hits, function(a, b) return names[a] < names[b] end)
+    return hits, profs
+end

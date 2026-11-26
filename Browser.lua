@@ -1753,24 +1753,33 @@ local function WelcomeView()
 end
 
 local ProfessionSections
-local function PickerView(hits, uses, recipes, query)
-    SetHeading(nil, "Search", ("%d reagent%s and %d recipe%s match \"%s\""):format(#hits, #hits == 1 and "" or "s",
+-- Search results: reagents, recipe items (patterns, plans...), then recipes; each kind under its own header when
+-- more than one kind matched
+local function PickerView(hits, uses, items, profs, recipes, query)
+    local nItems = #hits + #items
+    SetHeading(nil, "Search", ("%d item%s and %d recipe%s match \"%s\""):format(nItems, nItems == 1 and "" or "s",
         #recipes, #recipes == 1 and "" or "s", query))
-    if #hits + #recipes == 0 then return nil, "Nothing matches that." end
+    if nItems + #recipes == 0 then return nil, "Nothing matches that." end
+    local kinds = (#hits > 0 and 1 or 0) + (#items > 0 and 1 or 0) + (#recipes > 0 and 1 or 0)
     local list = {}
-    if #hits > 0 and #recipes > 0 then
-        list[1] = { header = true, key = "Reagents", text = "Reagents  " .. GREY .. #hits .. "|r" }
+    local function ItemSection(title, ids, Right)
+        if #ids == 0 then return end
+        if kinds > 1 then
+            list[#list + 1] = { header = true, key = title, text = title .. "  " .. GREY .. #ids .. "|r" }
+            if collapsed[title] then return end
+        end
+        for _, itemID in ipairs(ids) do
+            list[#list + 1] = {
+                itemID = itemID, lookup = itemID,
+                icon = C_Item.GetItemIconByID(itemID),
+                left = CS:ItemName(itemID) or ("item " .. itemID),
+                right = Right(itemID),
+            }
+        end
+        list[#list + 1] = { spacer = true }
     end
-    for _, itemID in ipairs(collapsed.Reagents and #recipes > 0 and {} or hits) do
-        local n = uses[itemID]
-        list[#list + 1] = {
-            itemID = itemID, lookup = itemID,
-            icon = C_Item.GetItemIconByID(itemID),
-            left = CS:ItemName(itemID) or ("item " .. itemID),
-            right = n .. " recipe" .. (n == 1 and "" or "s"),
-        }
-    end
-    if #list > 1 then list[#list + 1] = { spacer = true } end
+    ItemSection("Reagents", hits, function(id) return uses[id] .. " recipe" .. (uses[id] == 1 and "" or "s") end)
+    ItemSection("Recipe items", items, function(id) return profs[id] end)
     for _, row in ipairs(ProfessionSections(recipes)) do list[#list + 1] = row end
     if #list == 0 then return nil, FILTERED end
     return list
@@ -1923,10 +1932,11 @@ local function BuildView(query)
     if itemID and not CS:GetUses(itemID) and CS:GetMakers(itemID) then return MadeView(itemID) end
     if itemID then return ItemView(itemID) end
     local hits, uses = CS:SearchReagentsByName(query)
+    local items, profs = CS:SearchRecipeItemsByName(query)
     local recipes = CS:SearchRecipesByName(query)
-    if #hits == 1 and #recipes == 0 then return ItemView(hits[1]) end
+    if #hits + #items == 1 and #recipes == 0 then return ItemView(hits[1] or items[1]) end
     picking = #recipes > 0
-    return PickerView(hits, uses, recipes, query)
+    return PickerView(hits, uses, items, profs, recipes, query)
 end
 
 function Render(keepScroll)
