@@ -1537,7 +1537,16 @@ local function Build()
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        CS.data.settings.windowAt = { self:GetLeft(), self:GetTop() }
+    end)
+    -- where the player last left it
+    local at = CS.data.settings.windowAt
+    if at then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", at[1], at[2])
+    end
     f:SetFrameStrata("HIGH")
     f:SetClampedToScreen(true)
     f:SetTitle("Craftseeker")
