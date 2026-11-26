@@ -27,6 +27,7 @@ local defaults = {
         settings = { share = true, hidden = {}, dt = true, fd = true, opposite = false, unconfirmed = false, filters = {},
             tooltip = true, debug = false },
         minimap = { hide = false },  -- LibDBIcon's button position and visibility
+        unreachable = {},            -- [name] = time(): a whisper found them offline or on the other faction
     },
 }
 

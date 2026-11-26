@@ -460,6 +460,7 @@ end
 
 function Share:CHAT_MSG_ADDON(_, prefix, msg, chatType, sender)
     if CS.IsSecret(prefix, msg, chatType, sender) or prefix ~= PREFIX or type(msg) ~= "string" then return end
+    if chatType ~= "CHANNEL" then CS.Reachable(sender) end
     self:OnMessage(msg, chatType, sender)
 end
 

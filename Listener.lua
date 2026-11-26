@@ -364,10 +364,10 @@ local fdKinds = {
 }
 fdKinds.A = fdKinds.H
 
-function Listener:HandleFD(payload, sender)
+function Listener:HandleFD(payload, sender, chatType)
     local kind, origin, rest = payload:match("^(%a)%^([^%^]+)%^?(.*)$")
     local handle = kind and fdKinds[kind]
-    if handle then handle(self, origin, rest, sender) end
+    if handle then handle(self, origin, rest, sender, chatType) end
 end
 
 local PIECE = { ["1"] = "whole", ["2"] = "first", ["3"] = "middle", ["4"] = "last" }
@@ -380,7 +380,7 @@ function Listener:OnFD(msg, chatType, sender)
     if piece == "whole" or piece == "first" then
         fdBuffers[key] = nil
         if piece == "whole" then
-            self:HandleFD(body, sender)
+            self:HandleFD(body, sender, chatType)
             return
         end
         -- a sender who never finishes holds no memory for long
@@ -399,7 +399,7 @@ function Listener:OnFD(msg, chatType, sender)
     parts[#parts + 1] = body
     if piece == "last" then
         fdBuffers[key] = nil
-        self:HandleFD(table.concat(parts), sender)
+        self:HandleFD(table.concat(parts), sender, chatType)
     end
 end
 
@@ -407,6 +407,7 @@ end
 
 function Listener:CHAT_MSG_ADDON(_, prefix, msg, chatType, sender)
     if CS.IsSecret(prefix, msg, chatType, sender) or type(msg) ~= "string" or type(sender) ~= "string" then return end
+    if chatType ~= "CHANNEL" and (prefix == DT_PREFIX or prefix == FD_PREFIX) then CS.Reachable(sender) end
     if prefix == DT_PREFIX and DTEnabled() then
         self:OnDT(msg, chatType, sender)
     elseif prefix == FD_PREFIX and FDEnabled() and sender ~= UnitName("player") then

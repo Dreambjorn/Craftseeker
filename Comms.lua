@@ -4,18 +4,20 @@ local _, CS = ...
 local RESULT = Enum.SendAddonMessageResult or {}
 -- Sending -------------------------------------------------------------------
 -- Everything goes through ChatThrottleLib, which shares one bandwidth budget with every addon using it, so Craftseeker
--- never crowds out a raid or meter addon. Messages wait out combat lockdown and boss fights, and a whisper the server
--- refuses to "First Last" gets one more try as "First-Last".
+-- never crowds out a raid or meter addon. Messages wait out combat lockdown and boss fights, and a whisper the client
+-- refuses outright to "First Last" gets one more try as "First-Last".
 local CTL = ChatThrottleLib
 local THROTTLED = RESULT.AddonMessageThrottle or 3
+local TARGET_OFFLINE = RESULT.TargetOffline
 local held, flushing = {}, false
 local Transmit
 
--- Whispers the server answers with "No player named ...": a "First Last" name moves to "First-Last" and its recent
--- messages go again, and a name that fails that way too is skipped for half an hour. Only errors for our own whispers
--- are hidden; the player's typed whispers keep theirs.
-local ERROR_WINDOW, OFFLINE_SKIP, RECENT_MAX = 15, 1800, 30
-local recent, dashedFor, offline, hiddenAt = {}, {}, {}, {}
+-- Whispers the server answers with "No player named ...": offline, or the other faction, which a shared channel also
+-- holds and nothing tells apart beforehand. As other Forever addons do, we whisper, hide that line for our own
+-- whispers only, and leave the name alone for UNREACHABLE seconds, across reloads; a message from them by whisper,
+-- guild or group clears it.
+local ERROR_WINDOW, UNREACHABLE, RECENT_MAX = 15, 3 * 3600, 30
+local recent, hiddenAt = {}, {}
 
 -- Only the last few seconds of whispers are kept; older names and failures are forgotten
 local function Prune(now)
@@ -23,9 +25,24 @@ local function Prune(now)
         while list[1] and now - list[1].at > ERROR_WINDOW do table.remove(list, 1) end
         if not list[1] then recent[name] = nil end
     end
-    for name, at in pairs(offline) do
-        if now - at > OFFLINE_SKIP then offline[name], dashedFor[name], hiddenAt[name] = nil, nil, nil end
+    for name, at in pairs(hiddenAt) do
+        if now - at > ERROR_WINDOW then hiddenAt[name] = nil end
     end
+end
+
+local function Unreachable(name)
+    local list = CS.data and CS.data.unreachable
+    local at = list and list[name]
+    if at and time() - at > UNREACHABLE then
+        list[name], at = nil, nil
+    end
+    return at ~= nil
+end
+
+-- They reached us by whisper, guild or group: whispers to them work again
+function CS.Reachable(name)
+    local list = CS.data and CS.data.unreachable
+    if list and type(name) == "string" then list[name] = nil end
 end
 
 local pruneAt = 0
@@ -60,36 +77,21 @@ local function WhisperedLately(name)
     return false
 end
 
-local function NotFound(name)
-    local now = GetTime()
-    local list = recent[name]
-    recent[name], hiddenAt[name] = nil, now
-    local dashed = CS.DashedName(name)
-    if dashed and not dashedFor[name] then
-        CS:Debug("%s not found; whispering %s instead", name, dashed)
-        dashedFor[name] = dashed
-        -- each message is noted when queued and when sent; send it again once
-        local again = {}
-        for _, r in ipairs(list or {}) do
-            if now - r.at <= ERROR_WINDOW and not again[r.m] then
-                again[r.m] = true
-                r.m.target, r.m.dashed = dashed, true
-                Transmit(r.m)
-            end
-        end
-    elseif dashedFor[name] then
-        -- the server may name a failed "First-Last" whisper with a space too: once those went out, skip the player
-        local d = dashedFor[name]
-        local sent = recent[d]
-        if sent and sent[#sent] and now - sent[#sent].at <= ERROR_WINDOW then
-            if not offline[d] then CS:Debug("%s not found either; no whispers to them for 30 minutes", d) end
-            offline[d] = now
-        end
-    else
-        -- one error per queued message: say it once
-        if not offline[name] then CS:Debug("%s not found; no whispers to them for 30 minutes", name) end
-        offline[name] = now
+-- Marks every form we whispered the name in, so no queued message to them goes out either
+local function MarkUnreachable(name)
+    local list = CS.data and CS.data.unreachable
+    if not list then return end
+    if not list[name] then CS:Debug("%s can't be whispered (offline or the other faction); skipped for 3 hours", name) end
+    local now = time()
+    for _, key in ipairs({ name, (name:gsub(" ", "-")), (name:gsub("-", " ")) }) do list[key] = now end
+    for key in pairs(recent) do
+        if key:match("^[^-]+") == name then list[key] = now end
     end
+end
+
+local function NotFound(name)
+    recent[name], hiddenAt[name] = nil, GetTime()
+    MarkUnreachable(name)
 end
 
 local notFoundPattern
@@ -123,6 +125,11 @@ end
 local function Sent(m, didSend, result)
     if m.onSent then m.onSent(didSend) end
     if didSend and m.chatType == "WHISPER" then Remember(m) end
+    -- the client may know they're gone before the server says so: no chat line then
+    if m.chatType == "WHISPER" and TARGET_OFFLINE and result == TARGET_OFFLINE then
+        MarkUnreachable(m.target)
+        return
+    end
     if not didSend and m.chatType == "WHISPER" and not m.dashed and result ~= THROTTLED and CS.DashedName(m.target) then
         m.target, m.dashed = CS.DashedName(m.target), true
         Transmit(m)
@@ -130,10 +137,7 @@ local function Sent(m, didSend, result)
 end
 
 function Transmit(m)
-    if m.chatType == "WHISPER" then
-        m.target = dashedFor[m.target] or m.target
-        if offline[m.target] and GetTime() - offline[m.target] < OFFLINE_SKIP then return end
-    end
+    if m.chatType == "WHISPER" and Unreachable(m.target) then return end
     if CS.MessagingBlocked() then
         if #held < 200 then held[#held + 1] = m end
         if not flushing then
