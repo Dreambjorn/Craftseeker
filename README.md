@@ -1,88 +1,92 @@
 # Craftseeker
 Craftseeker is a reagent and recipe browser for WoW: Forever, laid out like the profession window.
 
-Alt+Click any crafting reagent in your bags to see every recipe it goes into, how to learn each one, and where to get the reagent — vendors, drops, gathering and chests, with drop rates measured by players.
+Alt+Click any item to see every recipe it goes into, how to learn each one, and where to get it.
 
 <img width="1031" height="775" alt="image" src="https://github.com/user-attachments/assets/7533968a-84de-4faf-aeec-1d68082ed020" />
 
 ---
 What it shows:
 
-- Every recipe that uses a reagent, grouped by profession
-- The recipes that make an item (right-click it)
-- How to learn each recipe — trainers, vendors, drops and quests
-- Where to get a reagent — vendors with prices, creatures with drop rates, skinning, mining, herbs and chests
-- Skill-up arrows, like the profession window
+- Recipes that use an item
+- Recipes that make an item
+- How to learn each recipe
+- Where to get a reagent, with drop rates
+- Chests and containers, with their rates
+- Recipe items and what they teach
+- Recipes in the profession window's categories
+- Skill-up arrows
 - Which of your characters know a recipe
-- How many of each reagent you carry, in your bags, bank and on your alts
-- Map pins for trainers, vendors and creatures (TomTom too, when installed)
+- Reagent counts in your bags, bank and alts
+- Shopping list for tracked recipes
+- Map pins, TomTom too
 
 <img width="1031" height="778" alt="image" src="https://github.com/user-attachments/assets/d869eef9-2a24-4be4-a0f3-d5f7a056ee1f" />
 
 ---
 
-The start page lists your favorite and tracked recipes, then the reagents in your bags and, apart, those only in your bank. Search for any reagent, recipe or crafted item, and narrow every list with the Filter button: your professions only, recipes with a skill-up, recipes you don't know yet, recipes you have the materials for, and by source or equipment slot. Recipes are grouped in the profession window's categories. Favorite a recipe to keep it at the top, or track it in the objective tracker.
+The start page lists your favorite and tracked recipes, then the reagents in your bags and bank. Search for any item or recipe and narrow the lists with the Filter button. Sort source tables by clicking a column title, or limit them to your zone or creatures near your level. Hide any profession or class in the settings.
 
 <img width="1041" height="781" alt="image" src="https://github.com/user-attachments/assets/bddf3152-b3a0-4453-8c48-45ad25e8186d" />
 
 ---
 
-Drop rates keep improving as you play. Every corpse you loot and every node you gather is counted, and Craftseeker shares those counts with other Craftseeker users online — both factions, your guild, group and friends. It also reads the counts Drop Tables and Forever Drops users share, and fills in levels, zones and vendor prices the game data leaves blank.
+Drop rates improve as you play. Every loot, gathered node and catch is counted and shared with other Craftseeker users online. It also reads the counts Drop Tables and Forever Drops users share.
 
 <img width="272" height="123" alt="image" src="https://github.com/user-attachments/assets/af5c168e-70e4-47ed-8814-5c8a6236b73f" />
 
-Reagents in your bags and bank get one line in their tooltip, saying how many recipes use them; nothing else touches item tooltips.
+Reagents in your bags and bank get one tooltip line saying how many recipes use them.
 
 <img width="283" height="177" alt="image" src="https://github.com/user-attachments/assets/e3354add-ab24-40c7-8866-3acfc5ea3d33" />
 
 ---
 
-Craftseeker works on its own. With [QuestieDB](https://github.com/Questie/QuestieDB) installed, it also lists the creatures, vendors, chests and quests QuestieDB knows about, so the lists are fuller from day one.
+With [QuestieDB](https://github.com/Questie/QuestieDB) installed, Craftseeker also lists the creatures, vendors, chests and quests it knows.
 
 ---
 
 ## Commands:
 
 - ` /cs ` — Open Craftseeker
-- ` /cs <item link, ID or name> ` — Look up a reagent, recipe or crafted item
+- ` /cs <item link, ID or name> ` — Look up an item or recipe
 - ` /cs options ` — Open the settings
 - ` /cs minimap ` — Show / hide the minimap button
-- ` /cs share ` — Turn sharing with other Craftseeker users on / off
-- ` /cs status ` — Check whether sharing reaches other players
+- ` /cs share ` — Turn sharing on / off
+- ` /cs status ` — Check whether sharing works
 - ` /cs stats ` — What's been learned so far
-- ` /cs profile ` — Measure time and memory use; run it again to stop and see the report
-- ` /cs reset ` — Wipe learned data; keeps favorites, settings and your characters' item counts and skill ranks
+- ` /cs profiler ` — Open the profiler
+- ` /cs reset ` — Wipe learned data; keeps favorites and settings
 ---
 
 ## FAQ
 
 **Q: Why are some drop rates missing?**
 
-**A:** A rate shows once someone has looted that creature. Rare drops often have no measured rate yet; they fill in as you and other players loot.
+**A:** A rate shows once someone has looted that creature. Rare drops fill in as more players loot.
 
 <br>
 
 **Q: Why don't I see the opposite faction's recipes?**
 
-**A:** The factions can't trade, so those recipes are hidden. Tick "Show opposite faction" in the settings to list them; they carry the opposite faction's emblem.
+**A:** The factions can't trade, so they're hidden. Tick "Show opposite faction" in the settings to list them.
 
 <br>
 
 **Q: Why is a recipe I found missing?**
 
-**A:** It is hidden until someone has seen it in the game. It shows once you learn it, a trainer offers it, or its recipe item is sold, looted or given as a quest reward. A recipe two other Craftseeker users found shows for you too; it takes two, so one player can't make up recipes for everyone. Tick "Show unconfirmed recipes" in the settings to list the hidden ones in grey.
+**A:** Recipes no player has seen on WoW: Forever yet stay hidden until you or two other Craftseeker users find them in game. Tick "Show unconfirmed recipes" in the settings to list them in grey.
 
 <br>
 
 **Q: How do I know which recipes I already know?**
 
-**A:** Recipes you know get a check mark, read from your spellbook at login. A blue name means one of your alts knows it — hover it to see who.
+**A:** Known recipes get a check mark. A blue name means one of your alts knows it — hover it to see who.
 
 <br>
 
 **Q: Sharing doesn't seem to work.**
 
-**A:** Run `/cs status`. It says whether the hidden channel passed its self-test and what was heard and sent this session. "Show debug messages" in the settings prints more.
+**A:** Run `/cs status` to see whether the hidden channel works and what was sent and heard. "Show debug messages" in the settings prints more.
 
 ---
 
@@ -92,7 +96,7 @@ Craftseeker works on its own. With [QuestieDB](https://github.com/Questie/Questi
 - Drop Tables' database also carries data from Blackthornes Farmer, https://github.com/Blackthornes/Blackthornes_Farmer (MIT), and Everloot, https://everloot.app (CC BY-SA 4.0).
 - Recipe sources: WhatsTraining, https://github.com/fusionpit/WhatsTraining (MIT).
 - Trainers, vendors and creature names: Data from Efficient Games (https://efficient.games), licensed under CC BY 4.0.
-- Creature places, quest names and givers: AllTheThings, https://github.com/ATTWoWAddon/AllTheThings (MIT).
+- Creature places, quest names and givers, fishing zones: AllTheThings, https://github.com/ATTWoWAddon/AllTheThings (MIT).
 - Libraries: Ace3, LibDataBroker, LibDBIcon, ChatThrottleLib and LibDeflate, each under its own licence in `Libs`.
 - Full notices: `LICENSE-DATA.md`.
 
