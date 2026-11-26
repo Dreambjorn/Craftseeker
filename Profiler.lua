@@ -5,6 +5,7 @@ local Profiler = { active = false, stats = {}, depth = 0, childMs = {}, childKB 
 CS.Profiler = Profiler
 
 local HITCH_MS = 25  -- a frame this long is logged with what Craftseeker did in it
+local BUSY_MS = 16   -- Craftseeker alone taking a 60 fps frame's whole budget
 local HITCH_MAX = 15
 local TOP = 12
 -- Library methods embedded in the addon and its modules; wrapping them would only add noise
@@ -76,6 +77,7 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
     Profiler.frames = Profiler.frames + 1
     Profiler.frameSum = Profiler.frameSum + frameMs
     if frameMs > Profiler.framePeak then Profiler.framePeak = frameMs end
+    if frameMs >= BUSY_MS then Profiler.busy = Profiler.busy + 1 end
     local mem = collectgarbage("count")
     local grown = mem - Profiler.lastMem
     Profiler.lastMem = mem
@@ -84,11 +86,9 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         for label, ms in pairs(frameSelf) do top[#top + 1] = { label, ms } end
         table.sort(top, function(a, b) return a[2] > b[2] end)
         local parts = {}
-        for i = 1, math.min(3, #top) do parts[i] = ("%s %.1f"):format(top[i][1], top[i][2]) end
-        table.insert(Profiler.hitches, ("%6.1fs frame %5.0f ms, Craftseeker %5.1f ms %6.0f KB, all addons %s; %s"):format(
-            GetTime() - Profiler.startedAt, elapsed * 1000, frameMs, frameKB,
-            grown < 0 and ("gc freed " .. math.floor(-grown) .. " KB") or ("+" .. math.floor(grown) .. " KB"),
-            #parts > 0 and table.concat(parts, ", ") or "-"))
+        for i = 1, math.min(3, #top) do parts[i] = ("%s %.1f ms"):format(top[i][1], top[i][2]) end
+        table.insert(Profiler.hitches, { at = GetTime() - Profiler.startedAt, frame = elapsed * 1000, ms = frameMs,
+            kb = frameKB, grown = grown, top = #parts > 0 and table.concat(parts, ", ") or "nothing" })
         if #Profiler.hitches > HITCH_MAX then table.remove(Profiler.hitches, 1) end
     end
     frameMs, frameKB = 0, 0
@@ -108,7 +108,7 @@ function Profiler:Start()
     wipe(self.hitches)
     wipe(frameSelf)
     frameMs, frameKB = 0, 0
-    self.frames, self.frameSum, self.framePeak, self.depth = 0, 0, 0, 0
+    self.frames, self.frameSum, self.framePeak, self.depth, self.busy = 0, 0, 0, 0, 0
     self.startedAt, self.lastMem, self.memAtStart = GetTime(), collectgarbage("count"), AddonMemory()
     self.memNow = self.memAtStart
     self.active = true
@@ -141,7 +141,7 @@ function Profiler:Summary()
     end
     local frames = self.frames or 0
     return { seconds = seconds, frames = frames, list = list, totalKB = totalKB,
-        avg = frames > 0 and self.frameSum / frames or 0, peak = self.framePeak or 0 }
+        avg = frames > 0 and self.frameSum / frames or 0, peak = self.framePeak or 0, busy = self.busy or 0 }
 end
 
 -- Plain text lines kept in SavedVariables as profileReport, for reading after a /reload
@@ -161,22 +161,27 @@ function Profiler:ReportLines()
             Count(CS.recipes), Count(data.shared), Count(data.bridges.fd), Count(data.bridges.dt), Count(data.npcs)),
         ("Addon memory %.1f MB at start, %.1f MB now (uncollected garbage included)%s"):format(self.memAtStart or 0,
             AddonMemory(), cleaned and (", %.1f MB after a cleanup"):format(cleaned) or ""),
-        ("Craftseeker Lua avg %.3f ms/frame, peak %.1f ms; allocated %.1f MB, %.0f KB/s"):format(s.avg, s.peak,
-            s.totalKB / 1024, s.totalKB / s.seconds),
-        "Top by self ms: calls, total ms, self ms, peak ms, self KB",
+        ("Craftseeker Lua avg %.3f ms/frame, peak %.1f ms, %d frames over %d ms; allocated %.1f MB, %.0f KB/s"):format(
+            s.avg, s.peak, s.busy, BUSY_MS, s.totalKB / 1024, s.totalKB / s.seconds),
     }
-    local function Rows(key)
+    -- one fact after another, never padded columns: the copy box and chat both use proportional fonts
+    local function Rows(title, key)
+        lines[#lines + 1] = title
         table.sort(s.list, function(a, b) return a[key] > b[key] end)
         for i = 1, math.min(TOP, #s.list) do
             local r = s.list[i]
-            lines[#lines + 1] = ("  %-36s %6d %8.1f %8.1f %7.1f %8.0f"):format(r.label, r.calls, r.ms, r.self, r.peak, r.kb)
+            lines[#lines + 1] = ("- %s: %d calls, %.1f ms total, %.1f ms own, slowest %.1f ms, %.0f KB"):format(r.label,
+                r.calls, r.ms, r.self, r.peak, r.kb)
         end
     end
-    Rows("self")
-    lines[#lines + 1] = "Top by self KB allocated: same columns"
-    Rows("kb")
+    Rows("Most time", "self")
+    Rows("Most garbage", "kb")
     lines[#lines + 1] = ("Frames of %d ms or more (last %d)"):format(HITCH_MS, HITCH_MAX)
-    for _, h in ipairs(self.hitches) do lines[#lines + 1] = "  " .. h end
+    for _, h in ipairs(self.hitches) do
+        lines[#lines + 1] = ("- at %.1f s: frame %.0f ms, Craftseeker %.1f ms and %.0f KB, all addons %s; busiest: %s"):format(
+            h.at, h.frame, h.ms, h.kb, h.grown < 0 and ("gc freed " .. math.floor(-h.grown) .. " KB")
+            or ("+" .. math.floor(h.grown) .. " KB"), h.top)
+    end
     return lines
 end
 
@@ -242,8 +247,8 @@ end
 -- name, calls, time, slowest, memory
 local COLUMNS = { { 0, 300, "LEFT" }, { 300, 80, "RIGHT" }, { 380, 95, "RIGHT" }, { 475, 95, "RIGHT" }, { 570, CONTENT_W - 570, "RIGHT" } }
 
-local function Row(cells, font)
-    for i, c in ipairs(COLUMNS) do
+local function Row(cells, font, columns)
+    for i, c in ipairs(columns or COLUMNS) do
         local fs = Text(c[1], c[2], cells[i] or "", font, c[3])
         fs:SetWordWrap(false)
     end
@@ -260,11 +265,18 @@ local function Table(list, key)
     if #list == 0 then Line(GREY .. "Nothing ran yet|r") end
 end
 
-local function Verdict(avg, peak)
-    if avg < 0.1 and peak < 16 then return "|cff40ff40Light|r: you won't notice it" end
-    if avg < 0.5 and peak < 33 then return GOLD .. "Moderate|r: an occasional busy frame" end
+-- From the average and how often Craftseeker alone filled a frame: one slow search or page draws a single spike,
+-- which the player asked for and barely sees
+local function Verdict(avg, busy, seconds)
+    local perMinute = busy * 60 / math.max(seconds, 60)
+    if avg < 0.1 and perMinute <= 2 then return "|cff40ff40Light|r: you won't notice it" end
+    if avg < 0.5 and perMinute <= 10 then return GOLD .. "Moderate|r: an occasional busy frame" end
     return "|cffff4040Heavy|r: it may cost frames; the tables show where"
 end
+
+-- when, the whole frame, Craftseeker's share, every addon's memory change, what Craftseeker ran most
+local SLOW_COLUMNS = { { 0, 60, "RIGHT" }, { 70, 70, "RIGHT" }, { 150, 95, "RIGHT" }, { 255, 110, "RIGHT" },
+    { 380, CONTENT_W - 380, "LEFT" } }
 
 function Profiler:Refresh()
     if not (win and win:IsShown()) or win.Copy:IsShown() then return end
@@ -282,8 +294,9 @@ function Profiler:Refresh()
     end
 
     Section("Speed")
-    Line(Verdict(s.avg, s.peak))
-    Line(("Average |cffffffff%.3f ms|r a frame, slowest |cffffffff%.1f ms|r"):format(s.avg, s.peak))
+    Line(Verdict(s.avg, s.busy, s.seconds))
+    Line(("Average |cffffffff%.3f ms|r a frame, slowest |cffffffff%.1f ms|r, |cffffffff%d|r frames over %d ms"):format(
+        s.avg, s.peak, s.busy, BUSY_MS))
 
     Section("Memory")
     -- the game's own memory read walks every addon and stalls a frame, so it isn't repeated each second
@@ -298,8 +311,15 @@ function Profiler:Refresh()
     Table(s.list, "kb")
 
     Section(("Slow frames, %d ms or more"):format(HITCH_MS))
-    if #self.hitches == 0 then Line(GREY .. "None|r") end
-    for _, h in ipairs(self.hitches) do Line(h) end
+    if #self.hitches == 0 then
+        Line(GREY .. "None|r")
+    else
+        Row({ "At", "Frame", "Craftseeker", "All addons", "Craftseeker ran" }, "GameFontDisable", SLOW_COLUMNS)
+    end
+    for _, h in ipairs(self.hitches) do
+        Row({ ("%.1f s"):format(h.at), ("%.0f ms"):format(h.frame), ("%.1f ms"):format(h.ms),
+            h.grown < 0 and ("%d KB freed"):format(math.floor(-h.grown)) or ("+%d KB"):format(math.floor(h.grown)), h.top }, nil, SLOW_COLUMNS)
+    end
     content:SetHeight(-cursor + 10)
 end
 
