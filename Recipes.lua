@@ -182,6 +182,8 @@ local SOURCES = { "shared", "fd", "dt" }
 -- own: only this account's loot changed; source: "shared", "fd" or "dt" when only that one did
 function CS:CountsChanged(own, source)
     self.countsVersion = (self.countsVersion or 0) + 1
+    -- this account's own counts changed (or everything did): own indexes rebuild on their own version
+    if own or not source then self.ownVersion = (self.ownVersion or 0) + 1 end
     if not own then
         self.sourceVersion = self.sourceVersion or { shared = 0, fd = 0, dt = 0 }
         for _, s in ipairs(SOURCES) do
@@ -191,11 +193,28 @@ function CS:CountsChanged(own, source)
     AceEvent:SendMessage("CRAFTSEEKER_COUNTS")
 end
 
--- True once per change of a source: the caller rebuilds what it keeps for it
+-- True once per change of a source: the caller rebuilds what it keeps for it. A transfer brings other players' counts
+-- a record at a time, so a source rebuilds at most every REBUILD_GAP seconds, and a redraw follows the last change.
+local REBUILD_GAP = 10
+local builtAt, redrawPending = {}, false
+
 local function Stale(self, built, source)
     local v = self.sourceVersion and self.sourceVersion[source] or 0
     if built[source] == v then return false end
-    built[source] = v
+    local at = builtAt[built] or {}
+    builtAt[built] = at
+    local now = GetTime()
+    if at[source] and now - at[source] < REBUILD_GAP then
+        if not redrawPending then
+            redrawPending = true
+            C_Timer.After(REBUILD_GAP - (now - at[source]) + 0.1, function()
+                redrawPending = false
+                AceEvent:SendMessage("CRAFTSEEKER_COUNTS")
+            end)
+        end
+        return false
+    end
+    built[source], at[source] = v, now
     return true
 end
 
@@ -223,8 +242,8 @@ local function AddCounts(into, from, counts, own)
 end
 
 function CS:BuildTotals()
-    if ownBuiltFor ~= self.countsVersion or not ownTotals then
-        ownBuiltFor = self.countsVersion
+    if ownBuiltFor ~= self.ownVersion or not ownTotals then
+        ownBuiltFor = self.ownVersion
         ownTotals, ownFrom = {}, {}
         AddCounts(ownTotals, ownFrom, self.data.counts, true)
     end
@@ -353,8 +372,8 @@ local function AddGather(index, kind, id, e, own)
 end
 
 local function BuildGather(self)
-    if ownGatherFor ~= self.countsVersion or not ownGather then
-        ownGatherFor, ownGather = self.countsVersion, {}
+    if ownGatherFor ~= self.ownVersion or not ownGather then
+        ownGatherFor, ownGather = self.ownVersion, {}
         for kind, book in pairs(self.data.gather) do
             for id, e in pairs(book) do AddGather(ownGather, kind, id, e, true) end
         end
