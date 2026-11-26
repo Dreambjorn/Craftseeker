@@ -5,8 +5,7 @@ local Inventory = CS:NewModule("Inventory", "AceEvent-3.0", "AceBucket-3.0")
 local BAGS = { Enum.BagIndex.Backpack, Enum.BagIndex.ReagentBag }
 local BANK = { Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.CharacterBankTab_9 }
 local bankOpen = false
-local bankReadAt                 -- last time the bank was read from item counts
-local BANK_REREAD = 300
+local bankReadAt                 -- the bank was read from item counts this session
 
 local function Mine()
     local key = CS.CharKey()
@@ -60,11 +59,13 @@ function Inventory:Update()
     local bags = Scan(BAGS)
     Diff(mine.bags or {}, bags, changed)
     mine.bags = bags
-    -- the bank tabs fill in while the bank is open; otherwise item counts give it, every few minutes at most
+    -- the bank tabs fill in while the bank is open. A closed bank can't change, so item counts (two calls for every
+    -- reagent, tens of ms) stand in only once, for a character whose bank Craftseeker hasn't seen open
     local bank
     if bankOpen then
         bank = Scan(BANK)
-    elseif not bankReadAt or GetTime() - bankReadAt > BANK_REREAD then
+        mine.bankSeen = true
+    elseif not bankReadAt and not mine.bankSeen then
         bankReadAt = GetTime()
         -- counts not loaded yet read as an empty bank; keep the last known contents then
         bank = BankFromCounts()
@@ -77,6 +78,7 @@ function Inventory:Update()
     if next(changed) then self:SendMessage("CRAFTSEEKER_ITEMS", changed) end
 end
 
+-- At login: counts stand in for a bank this character never had open
 function Inventory:ReadBank()
     bankReadAt = nil
     self:Update()
@@ -89,7 +91,6 @@ end
 
 function Inventory:BANKFRAME_CLOSED()
     bankOpen = false
-    bankReadAt = GetTime()
 end
 
 -- This character's count (bags and bank), the alts that have some ({ { name, count }, ... } most first), and its bank count
