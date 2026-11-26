@@ -35,6 +35,20 @@ local FILTERED = "No recipe matches the filters."
 local SKILL_ORDER = { orange = 1, yellow = 2, green = 3, grey = 4, none = 5, learn = 6 }
 local FAVORITES = "Favorites" -- the first section, like the profession window's
 
+-- Tooltips open inside the window: over the hovered widget, from its edge nearer the window's middle, or under it
+-- when the window has no room left above
+local function PlaceTip(self)
+    if not f then return end
+    GameTooltip:ClearAllPoints()
+    local side = (self:GetCenter() or 0) < (f:GetCenter() or 0) and "LEFT" or "RIGHT"
+    local height = GameTooltip:GetHeight() * GameTooltip:GetEffectiveScale() / self:GetEffectiveScale()
+    if (self:GetTop() or 0) + height + 2 <= (f:GetTop() or 0) then
+        GameTooltip:SetPoint("BOTTOM" .. side, self, "TOP" .. side, 0, 2)
+    else
+        GameTooltip:SetPoint("TOP" .. side, self, "BOTTOM" .. side, 0, -2)
+    end
+end
+
 local hoverAt, refreshing = 0, false -- a fresh hover, apart from the compare refresh below setting it again
 local function ShowItemTooltip(self)
     if not refreshing then
@@ -42,11 +56,11 @@ local function ShowItemTooltip(self)
         self.hoverAt, self.refreshes = hoverAt, 0
     end
     if self.itemID then
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
         GameTooltip:SetItemByID(self.itemID)
         GameTooltip:Show()
     elseif self.spellID then
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
         GameTooltip:SetSpellByID(self.spellID)
         GameTooltip:Show()
     else
@@ -74,6 +88,7 @@ local function ShowItemTooltip(self)
         if CS:GetMakers(self.itemID) then GameTooltip_AddInstructionLine(GameTooltip, "Right-click to see how it's made") end
     end
     GameTooltip:Show()
+    PlaceTip(self)
 end
 
 -- Right-click: the recipes that make the item
@@ -338,10 +353,11 @@ end
 
 local function RowTooltip(self)
     if not self.tip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetOwner(self, "ANCHOR_NONE")
     GameTooltip:AddLine(self.tip[1], 1, 1, 1)
     for i = 2, #self.tip do GameTooltip:AddLine(self.tip[i], 0.8, 0.8, 0.8, true) end
     GameTooltip:Show()
+    PlaceTip(self)
 end
 
 -- Only our last TomTom waypoint is replaced; the player's own stay
@@ -1217,9 +1233,10 @@ local function BuildDetail(panel)
         Render(true)
     end)
     star:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
         GameTooltip_AddHighlightLine(GameTooltip, CS:IsFavorite(selectedRecipe) and "Remove from favorites" or "Add to favorites")
         GameTooltip:Show()
+        PlaceTip(self)
     end)
     star:SetScript("OnLeave", GameTooltip_Hide)
     detail.Favorite = star
@@ -1244,9 +1261,10 @@ local function BuildDetail(panel)
             ShowDetail(true)
         end)
         box:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetOwner(self, "ANCHOR_NONE")
             GameTooltip_AddHighlightLine(GameTooltip, tip())
             GameTooltip:Show()
+            PlaceTip(self)
         end)
         box:SetScript("OnLeave", GameTooltip_Hide)
         return box
@@ -1545,11 +1563,12 @@ local function Build()
         b:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. kind .. "Page-Disabled")
         b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
         local function Tip(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetOwner(self, "ANCHOR_NONE")
             GameTooltip_AddHighlightLine(GameTooltip, label)
             local page = Browser:PageName(step)
             if page then GameTooltip_AddNormalLine(GameTooltip, page) end
             GameTooltip:Show()
+            PlaceTip(self)
         end
         -- the tooltip follows each click while the mouse stays on the button; the redraw can take the tooltip away, so
         -- it is drawn again a frame later as well
