@@ -6,7 +6,7 @@ local HEADER_H, ROW_H, SPACER_H = 25, 26, 12 -- row pitch and section gap as For
 local DIVIDER_H = 30
 local LIST_W = 274
 local SLOT = 44 -- one size for output, reagents and recipe item, like the profession window
-local REAGENT_STEP, REAGENT_COL = 54, 250
+local REAGENT_STEP, REAGENT_COL = 54, 300
 local DEFAULT_ICON = "Interface\\Icons\\INV_Misc_Bag_Hearthstone"
 local GREY, GOLD, RED = "|cff9d9d9d", "|cffffd100", "|cffff4040"
 local FACTION_NAME = { "Alliance", "Horde" }
@@ -223,7 +223,7 @@ end
 -- Detail panel ---------------------------------------------------------------
 -- The right pane scrolls, so every source can be listed in full: drops, vendors and trainers are tables.
 
-local PAD, DETAIL_W, ROW = 28, 484, 21
+local PAD, DETAIL_W, ROW = 28, 614, 21
 local pool = { text = {}, rows = {}, slots = {}, lines = {} } -- widgets reused across selections
 local used = { text = 0, rows = 0, slots = 0, lines = 0 }
 local content, cursor
@@ -1164,7 +1164,7 @@ end
 
 local function Build()
     f = CreateFrame("Frame", "CraftseekerBrowser", UIParent, "PortraitFrameTemplate")
-    f:SetSize(830, 620)
+    f:SetSize(960, 620)
     f:SetPoint("CENTER")
     f:SetMovable(true)
     f:EnableMouse(true)
