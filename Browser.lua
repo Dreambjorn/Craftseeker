@@ -2073,16 +2073,38 @@ function Browser:Toggle()
     if f and f:IsShown() then f:Hide() else self:Show("") end
 end
 
--- Names and icons of uncached items arrive in bursts; only those the window showed without a name redraw it
-function Browser:ItemInfoReceived(arrived)
-    local missing, redraw = CS.missingNames, false
-    for itemID in pairs(arrived or {}) do
-        if missing[itemID] then
-            missing[itemID] = nil
-            redraw = true
+-- A name that arrived goes only where the window showed its id: list rows and the heading get it in place, and the
+-- right pane draws again, as it holds names inside sentences. The list is never searched again for it.
+local function Relabel(arrived)
+    scrollBox:ForEachFrame(function(row)
+        local id = row.itemID
+        local data = id and arrived[id] and row.GetElementData and row:GetElementData()
+        local name = data and CS:ItemName(id, true)
+        if name and data.left == "item " .. id then
+            data.left = name
+            row.Label:SetText(name)
         end
+    end)
+    if currentItem and arrived[currentItem] and title:GetText() == "item " .. currentItem then
+        title:SetText(CS:ItemName(currentItem, true) or title:GetText())
     end
-    if redraw and f and f:IsShown() and currentQuery ~= "" then Render(true) end
+    ShowDetail(true)
+end
+
+-- Names of uncached items arrive in bursts and are placed together. An item the server has no data for answers
+-- every time it is asked, and some answer yet stay nameless: each item counts once a session.
+local redrawSoon, arrivedNames, placed = nil, {}, {}
+function Browser:GET_ITEM_INFO_RECEIVED(_, itemID, success)
+    if CS.IsSecret(itemID, success) or success == false or not CS.missingNames[itemID] or placed[itemID] then return end
+    CS.missingNames[itemID] = nil
+    placed[itemID], arrivedNames[itemID] = true, true
+    if redrawSoon then return end
+    redrawSoon = C_Timer.NewTimer(0.3, function()
+        redrawSoon = nil
+        local arrived = arrivedNames
+        arrivedNames = {}
+        if f and f:IsShown() then Relabel(arrived) end
+    end)
 end
 
 -- Skill ranks or tracked recipes: redraw where the reader is
@@ -2157,7 +2179,7 @@ function Browser:OnEnable()
     self:RegisterEvent("TRACKED_RECIPE_UPDATE", "ItemsChanged")
     -- loot and shared counts come in bursts; one redraw every few seconds at most
     self:RegisterBucketMessage("CRAFTSEEKER_COUNTS", 3, "CountsChanged")
-    self:RegisterBucketEvent("GET_ITEM_INFO_RECEIVED", 0.3, "ItemInfoReceived")
+    self:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     -- Alt+Click any item (bags, bank, loot...) to look it up; Shift+Click drops it into a focused search box
     hooksecurefunc("HandleModifiedItemClick", function(link)
         if not link or CS.IsSecret(link) or not link:find("item:") then return end
