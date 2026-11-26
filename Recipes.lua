@@ -744,18 +744,21 @@ function CS:IsObtainable(recipeID)
 end
 
 CS.missingNames = {} -- [itemID] = true: shown before the client had its name
-local requested = {} -- once a session: an item the server lacks answers each request and would redraw forever
+local requested = {} -- once a session: the server answers even for items it lacks, and each answer redraws
 
-function CS:ItemName(itemID)
+-- Only for an item the window shows; searches never ask, as they read thousands of names on every redraw
+function CS:LoadItem(itemID)
+    if requested[itemID] or C_Item.IsItemDataCachedByID(itemID) then return end
+    requested[itemID] = true
+    C_Item.RequestLoadItemDataByID(itemID)
+end
+
+-- quiet: a search reading names, which marks nothing for a redraw
+function CS:ItemName(itemID, quiet)
     local name = C_Item.GetItemNameByID(itemID)
     if name then return name end
+    if not quiet then self.missingNames[itemID] = true end
     local baked = self.BUILTIN_ITEMS and self.BUILTIN_ITEMS[itemID]
-    -- The name lookup never loads an uncached item, so without a request no name arrives to redraw with
-    if not baked and not requested[itemID] then
-        requested[itemID] = true
-        C_Item.RequestLoadItemDataByID(itemID)
-    end
-    self.missingNames[itemID] = true
     return baked and baked[1]
 end
 
@@ -991,7 +994,7 @@ function CS:SearchRecipesByName(text)
     local hits = {}
     for recipeID, rec in pairs(self.recipes) do
         local name = Lower("r" .. recipeID, rec.n)
-        local made = rec.o and Lower(rec.o, self:ItemName(rec.o))
+        local made = rec.o and Lower(rec.o, self:ItemName(rec.o, true))
         if ((name and name:find(text, 1, true)) or (made and made:find(text, 1, true))) and self:Shown(recipeID) then
             hits[#hits + 1] = recipeID
         end
@@ -1035,10 +1038,8 @@ function CS:SearchReagentsByName(text)
     text = text:lower()
     local hits, names, uses = {}, {}, {}
     for itemID in pairs(self.usedIn) do
-        local name = self:ItemName(itemID)
-        if not name then
-            C_Item.RequestLoadItemDataByID(itemID)
-        elseif Lower(itemID, name):find(text, 1, true) then
+        local name = self:ItemName(itemID, true)
+        if name and Lower(itemID, name):find(text, 1, true) then
             local list = self:GetUses(itemID)
             if list then
                 hits[#hits + 1] = itemID
@@ -1056,10 +1057,8 @@ function CS:SearchRecipeItemsByName(text)
     text = text:lower()
     local hits, names, profs = {}, {}, {}
     for itemID in pairs(self.recipeItems) do
-        local name = self:ItemName(itemID)
-        if not name then
-            C_Item.RequestLoadItemDataByID(itemID)
-        elseif Lower(itemID, name):find(text, 1, true) then
+        local name = self:ItemName(itemID, true)
+        if name and Lower(itemID, name):find(text, 1, true) then
             local taught = self:GetTaught(itemID)
             if taught then
                 hits[#hits + 1] = itemID

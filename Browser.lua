@@ -689,6 +689,7 @@ local function AddObjects(itemID, qs, heading, key, rates)
     local byName, merged = {}, {}
     for _, e in ipairs(list) do
         if e.kind == "c" then
+            CS:LoadItem(e.id)
             e.name = CS:ItemName(e.id) or ("Item " .. e.id)
         else
             if not e.name then
