@@ -12,11 +12,13 @@ local GREY, GOLD, RED = "|cff9d9d9d", "|cffffd100", "|cffff4040"
 local FACTION_NAME = { "Alliance", "Horde" }
 
 local f, searchBox, title, summary, scrollBox, listEmpty
+local navBack, navForward
 local detail -- right-hand panel widgets
 local currentQuery, currentItem, selectedRecipe
 local itemPage   -- the right pane shows currentItem's own page (where to get it) instead of a recipe
 local renderKeep -- the list redraws in place rather than for a new lookup
 local wasPage    -- the item page was up before this redraw
+local restoring  -- Back or Forward redraws a page as it was left
 local collapsed = {} -- [section title] = true, kept for the session
 local expanded = {}  -- [table] = true: shown in full, until another recipe is picked
 local madeView       -- the list shows the recipes that make currentItem, not those that use it
@@ -1514,12 +1516,46 @@ local function Build()
 
     title = Text(f, "GameFontHighlightLarge2")
     title:SetPoint("TOPLEFT", 66, -30)
-    title:SetPoint("RIGHT", -24, 0)
+    title:SetPoint("RIGHT", -96, 0)
     title:SetWordWrap(false)
     summary = Text(f, "GameFontHighlight")
     summary:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-    summary:SetPoint("RIGHT", -24, 0)
+    summary:SetPoint("RIGHT", -96, 0)
     summary:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Back and Forward, drawn like the game's own page buttons
+    local function NavButton(kind, label, step)
+        local b = CreateFrame("Button", nil, f)
+        b:SetSize(32, 32)
+        b:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. kind .. "Page-Up")
+        b:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. kind .. "Page-Down")
+        b:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. kind .. "Page-Disabled")
+        b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+        local function Tip(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip_AddHighlightLine(GameTooltip, label)
+            local page = Browser:PageName(step)
+            if page then GameTooltip_AddNormalLine(GameTooltip, page) end
+            GameTooltip:Show()
+        end
+        -- the tooltip follows each click while the mouse stays on the button; the redraw can take the tooltip away, so
+        -- it is drawn again a frame later as well
+        b:SetScript("OnClick", function(self)
+            Browser:Go(step)
+            if self:IsMouseOver() then Tip(self) end
+            C_Timer.After(0, function()
+                if self:IsShown() and self:IsMouseOver() then Tip(self) end
+            end)
+        end)
+        b:SetScript("OnEnter", Tip)
+        b:SetScript("OnLeave", GameTooltip_Hide)
+        return b
+    end
+    navForward = NavButton("Next", "Forward", 1)
+    navForward:SetPoint("TOPRIGHT", -14, -32)
+    navBack = NavButton("Prev", "Back", -1)
+    navBack:SetPoint("RIGHT", navForward, "LEFT", -4, 0)
+    Browser.navBack, Browser.navForward = navBack, navForward
 
     local list = CreateFrame("Frame", nil, f)
     list:SetWidth(LIST_W)
@@ -1879,7 +1915,7 @@ local function ItemView(itemID)
     -- reagents and recipe items get a page of their own, opened on a new lookup; a redraw stays on what the reader
     -- picked. Other items have no source data, so they get none.
     local hasPage = CS.usedIn[itemID] ~= nil or CS.recipeItems[itemID] ~= nil
-    local page = hasPage and (wasPage or not renderKeep)
+    local page = hasPage and (wasPage or not (renderKeep or restoring))
     local list = ProfessionSections(uses or taught or nil, uses and itemID or nil)
     itemPage = page
     if page then selectedRecipe = nil end
@@ -1946,7 +1982,7 @@ end
 function Render(keepScroll)
     renderKeep = keepScroll
     local list, message = BuildView(currentQuery)
-    if not currentItem and not picking and not (keepScroll and homeKeep) then selectedRecipe = nil end
+    if not currentItem and not picking and not ((keepScroll or restoring) and homeKeep) then selectedRecipe = nil end
     scrollBox:SetDataProvider(CreateDataProvider(list or {}),
         keepScroll and ScrollBoxConstants.RetainScrollPosition or ScrollBoxConstants.DiscardScrollPosition)
     -- under the item page row when there is one, clear of it
@@ -1955,17 +1991,81 @@ function Render(keepScroll)
     ShowDetail(keepScroll)
 end
 
+-- Pages visited, for Back and Forward: { query, recipe, page, typed }. A search typed letter by letter is one entry.
+local HISTORY_MAX = 50
+local history, at = {}, 0
+
+-- the page being left keeps the recipe or item page the reader had up, and its heading: an item's name may not be
+-- cached when Back names it later
+local function SaveSpot()
+    local e = history[at]
+    if e then e.recipe, e.page, e.title = selectedRecipe, itemPage, title:GetText() end
+end
+
+local function UpdateNav()
+    navBack:SetEnabled(at > 1)
+    navForward:SetEnabled(at < #history)
+end
+
+local function Remember(query, typed)
+    SaveSpot()
+    local e = history[at]
+    if e and (e.query == query or (typed and e.typed)) then
+        e.query, e.typed = query, typed
+        return
+    end
+    for i = #history, at + 1, -1 do history[i] = nil end
+    if #history >= HISTORY_MAX then table.remove(history, 1) end
+    history[#history + 1] = { query = query, typed = typed }
+    at = #history
+end
+
+-- show the item's name rather than item:123 or a raw link
+local function SearchText(query)
+    local itemID = CS.ItemIDFromText(query) or tonumber(query:match("^made:(%d+)$"))
+    searchBox:SetText(itemID and CS:ItemName(itemID) or query)
+end
+
 -- fromTyping: the search box already holds the text, so don't overwrite it mid-edit
 function Browser:Show(query, fromTyping)
     if not f then Build() end
     f:Show()
     currentQuery = strtrim(query or "")
-    if not fromTyping then
-        -- show the item's name rather than item:123 or a raw link
-        local itemID = CS.ItemIDFromText(currentQuery) or tonumber(currentQuery:match("^made:(%d+)$"))
-        searchBox:SetText(itemID and CS:ItemName(itemID) or currentQuery)
-    end
+    Remember(currentQuery, fromTyping == true)
+    if not fromTyping then SearchText(currentQuery) end
     Render(false)
+    UpdateNav()
+end
+
+-- What Back (step -1) or Forward (1) leads to, in words: the item, recipe list or search, and the recipe left open
+function Browser:PageName(step)
+    local e = history[at + step]
+    if not e then return nil end
+    local q = e.query
+    local made = tonumber(q:match("^made:(%d+)$"))
+    local itemID = made or CS.ItemIDFromText(q)
+    local name = q == "" and "The start page"
+        or made and ("Recipes that make " .. (CS:ItemName(made) or e.title or "an item"))
+        or itemID and (CS:ItemName(itemID) or e.title or "An item")
+        or ('Search for "' .. q .. '"')
+    -- the open recipe, unless it is named like the item: "Fire Oil" made by "Fire Oil"
+    local rec = not e.page and e.recipe and CS.recipes[e.recipe]
+    local itemName = itemID and CS:ItemName(itemID)
+    return rec and rec.n and rec.n ~= itemName and (name .. ", " .. rec.n) or name
+end
+
+-- step -1 goes back a page, 1 forward again, each as the reader left it
+function Browser:Go(step)
+    local e = history[at + step]
+    if not e then return end
+    SaveSpot()
+    at = at + step
+    currentQuery, selectedRecipe, itemPage = e.query, e.recipe, e.page
+    SearchText(currentQuery)
+    restoring = true
+    Render(false)
+    restoring = false
+    UpdateNav()
 end
 
 function Browser:Toggle()
