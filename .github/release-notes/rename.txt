@@ -1,3 +1,3 @@
 # Release note lines that replace a commit subject: the commit hash, then the line players read.
 eb7b9fa Show reagent counts in your bags and bank separately
-aa7eda2 Show loot rates for each container, like clams and lockboxes
+43e8da2 Add /cs profiler, showing Craftseeker's time and memory use

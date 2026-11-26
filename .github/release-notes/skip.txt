@@ -7,3 +7,16 @@ a608e5c Rename modules after what they do
 4df2c7b Remove the throttle error diagnostics
 712cd67 Move misplaced function comments
 be9a1a0 Add containers to the recipe data
+174885d Load uncached item names before showing them
+492abd5 Request each missing item name only once
+aa7eda2 Record which container loot came from
+ff3173d Drop the Opened label from container rows
+831e96e Clarify the container row tooltip
+bb6e952 Name the looked-up item in container tooltips
+9598e74 Show profiler results in a window
+001f1aa Show the profiler on top and let it minimize
+a0e484f Rework the profiler's verdict and layout
+8846e2b Make the profiler report read-only
+e22ecdf Keep the profiler buttons when minimized
+0dae0d1 Remember where the profiler was left
+1511597 Add tooltips to the profiler buttons
