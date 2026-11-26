@@ -8891,7 +8891,7 @@ CS.BUILTIN_CLASS = {
 -- (Drop Tables contributors, https://github.com/valcheffnet/DropTables, CC BY-SA 4.0) and Polestar
 -- Recorder sessions (the Polestar authors, https://github.com/fitzforge/polestar, CC BY 4.0), with loot counts
 -- Craftseeker users shared: recipe items, and reagents Craftseeker users measured; every creature with a count.
--- This table is shared under CC BY-SA 4.0; see LICENSE-DATA.md.
+-- This table is shared under CC BY-SA 4.0; see DATA-NOTICES.md.
 -- [itemID] = { npcID, name, chance in hundredths of a percent, kills, ... }
 CS.BUILTIN_RATES = {
 [2406]={113,"Stonetusk Boar",170,81,3129,"Kul Tiras Marine",91,110},
@@ -9035,7 +9035,7 @@ CS.BUILTIN_OWN_RATES = {
 -- Gathering players measured on WoW Forever: Drop Tables skinning counts (CC BY-SA 4.0), Polestar node and
 -- chest windows (CC BY 4.0) and Craftseeker users' gathering, reagents only. kind 1 creature (skinned), 2
 -- object; profession 1
--- Skinning, 2 Mining, 3 Herbalism, 4 Chest. This table is shared under CC BY-SA 4.0; see LICENSE-DATA.md.
+-- Skinning, 2 Mining, 3 Herbalism, 4 Chest. This table is shared under CC BY-SA 4.0; see DATA-NOTICES.md.
 -- [itemID] = { kind, id, profession, chance in hundredths, times, ... }
 CS.BUILTIN_GATHER = {
 [118]={2,106318,3,7500,413,2,106319,3,1538,476},
