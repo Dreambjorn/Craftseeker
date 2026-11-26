@@ -1033,21 +1033,43 @@ function CS:Difficulty(recipeID, char)
     return "orange", rank
 end
 
+-- A search hit's recipes that pass the Filter menu, and whether this character has the profession of one
+local function Kept(self, list, filtered, me)
+    if not list then return nil end
+    local kept, mine = {}, false
+    for _, id in ipairs(list) do
+        if not filtered or self:PassesFilters(id) then
+            kept[#kept + 1] = id
+            mine = mine or self:SkillOf(me, self.recipes[id].p) ~= nil
+        end
+    end
+    return #kept > 0 and kept or nil, mine
+end
+
+-- Hits of this character's professions first, then by name
+local function SortHits(hits, names, mine)
+    table.sort(hits, function(a, b)
+        if mine[a] ~= mine[b] then return mine[a] end
+        return names[a] < names[b]
+    end)
+end
+
 -- Reagent itemIDs whose name contains the search text and that this character can use
 function CS:SearchReagentsByName(text)
     text = text:lower()
-    local hits, names, uses = {}, {}, {}
+    local hits, names, uses, mine = {}, {}, {}, {}
+    local filtered, me = self:AnyFilter(), self.CharKey()
     for itemID in pairs(self.usedIn) do
         local name = self:ItemName(itemID, true)
         if name and Lower(itemID, name):find(text, 1, true) then
-            local list = self:GetUses(itemID)
+            local list, ours = Kept(self, self:GetUses(itemID), filtered, me)
             if list then
                 hits[#hits + 1] = itemID
-                names[itemID], uses[itemID] = name, #list
+                names[itemID], uses[itemID], mine[itemID] = name, #list, ours
             end
         end
     end
-    table.sort(hits, function(a, b) return names[a] < names[b] end)
+    SortHits(hits, names, mine)
     return hits, uses
 end
 
@@ -1055,17 +1077,18 @@ end
 -- teaches for
 function CS:SearchRecipeItemsByName(text)
     text = text:lower()
-    local hits, names, profs = {}, {}, {}
+    local hits, names, profs, mine = {}, {}, {}, {}
+    local filtered, me = self:AnyFilter(), self.CharKey()
     for itemID in pairs(self.recipeItems) do
         local name = self:ItemName(itemID, true)
         if name and Lower(itemID, name):find(text, 1, true) then
-            local taught = self:GetTaught(itemID)
+            local taught, ours = Kept(self, self:GetTaught(itemID), filtered, me)
             if taught then
                 hits[#hits + 1] = itemID
-                names[itemID], profs[itemID] = name, self.recipes[taught[1]].p
+                names[itemID], profs[itemID], mine[itemID] = name, self.recipes[taught[1]].p, ours
             end
         end
     end
-    table.sort(hits, function(a, b) return names[a] < names[b] end)
+    SortHits(hits, names, mine)
     return hits, profs
 end
