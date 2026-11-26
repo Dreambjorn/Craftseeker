@@ -14,6 +14,9 @@ local FACTION_NAME = { "Alliance", "Horde" }
 local f, searchBox, title, summary, scrollBox, listEmpty
 local detail -- right-hand panel widgets
 local currentQuery, currentItem, selectedRecipe
+local itemPage   -- the right pane shows currentItem's own page (where to get it) instead of a recipe
+local renderKeep -- the list redraws in place rather than for a new lookup
+local wasPage    -- the item page was up before this redraw
 local collapsed = {} -- [section title] = true, kept for the session
 local expanded = {}  -- [table] = true: shown in full, until another recipe is picked
 local madeView       -- the list shows the recipes that make currentItem, not those that use it
@@ -21,6 +24,7 @@ local picking        -- search results with recipes in them: the first one is sh
 local AddSkill
 local TABLE_ROWS = 10
 local Render, ShowDetail, DrawDetail
+local AddReagents, AddMakers
 local FILTERS = { { "mine", "My professions only" }, { "skillUp", "Has skill up" }, { "unknown", "Not known yet" },
     { "materials", "Have materials" } }
 local FILTERED = "No recipe matches the filters."
@@ -101,13 +105,24 @@ local function RecipeMenu(row)
     end)
 end
 
+local function IsSelected(row)
+    if row.page then return itemPage == true end
+    return row.recipeID ~= nil and not itemPage and row.recipeID == selectedRecipe
+end
+
 local function OnRowClick(self, button)
-    if self.recipeID and button == "RightButton" and not IsShiftKeyDown() then
+    if self.page and button ~= "RightButton" and not IsShiftKeyDown() then
+        itemPage, selectedRecipe = true, nil
+        scrollBox:ForEachFrame(function(frame)
+            if frame.Selected then frame.Selected:SetShown(IsSelected(frame)) end
+        end)
+        ShowDetail()
+    elseif self.recipeID and button == "RightButton" and not IsShiftKeyDown() then
         RecipeMenu(self)
     elseif self.recipeID and not IsShiftKeyDown() and button ~= "RightButton" then
-        selectedRecipe = self.recipeID
+        selectedRecipe, itemPage = self.recipeID, false
         scrollBox:ForEachFrame(function(frame)
-            if frame.Selected then frame.Selected:SetShown(frame.recipeID ~= nil and frame.recipeID == selectedRecipe) end
+            if frame.Selected then frame.Selected:SetShown(IsSelected(frame)) end
         end)
         ShowDetail()
     else
@@ -182,7 +197,8 @@ local function InitRow(row, data)
         row:SetScript("OnLeave", GameTooltip_Hide)
         row:SetScript("OnClick", OnRowClick)
     end
-    row.itemID, row.lookup, row.recipeID, row.spellID = data.itemID, data.lookup, data.recipeID, data.spellID
+    row.itemID, row.lookup, row.recipeID, row.spellID, row.page = data.itemID, data.lookup, data.recipeID, data.spellID,
+        data.page == true
     row.Label:SetText(data.left or "")
     row.Right:SetText(data.right or "")
     row.Label:ClearPoint("LEFT")
@@ -199,8 +215,8 @@ local function InitRow(row, data)
         row.Icon:Hide()
         row.Label:SetPoint("LEFT", 21, 0)
     end
-    row.Selected:SetShown(data.recipeID ~= nil and data.recipeID == selectedRecipe)
-    row.Highlight:SetShown(data.recipeID ~= nil or data.lookup ~= nil)
+    row.Selected:SetShown(IsSelected(row))
+    row.Highlight:SetShown(data.recipeID ~= nil or data.lookup ~= nil or data.page ~= nil)
 end
 
 local function InitHeader(button, data)
@@ -536,7 +552,7 @@ local function IsLooted(g)
     return g.kind == "c" or g.kind == "g" and g.p == "Chest"
 end
 
-local function AddObjects(itemID, qs, heading, key)
+local function AddObjects(itemID, qs, heading, key, rates)
     local byKey, list = {}, {}
     local function Entry(kind, id)
         local e = byKey[kind .. id]
@@ -552,7 +568,8 @@ local function AddObjects(itemID, qs, heading, key)
         e.name, e.zones, e.pin = o.name, o.zones, o.pin
     end
     for _, c in ipairs(qs and qs.containers or {}) do Entry("c", c.id) end
-    for _, g in ipairs(CS:GetGatherRates(itemID) or {}) do
+    if rates == nil then rates = CS:GetGatherRates(itemID) end
+    for _, g in ipairs(rates or {}) do
         if IsLooted(g) then
             local e = Entry(g.kind, g.id)
             e.chance, e.k, e.own, e.n = g.chance, g.k, g.own, g.n
@@ -619,9 +636,10 @@ local function AddObjects(itemID, qs, heading, key)
 end
 
 -- Skinning, mining and herb gathering corpses and nodes, with how often each gave the item; chests go with the objects
-local function AddGathering(itemID)
+local function AddGathering(itemID, rates)
     local list = {}
-    for _, g in ipairs(CS:GetGatherRates(itemID) or {}) do
+    if rates == nil then rates = CS:GetGatherRates(itemID) end
+    for _, g in ipairs(rates or {}) do
         if not IsLooted(g) then list[#list + 1] = g end
     end
     if #list == 0 then return false end
@@ -655,14 +673,15 @@ end
 
 -- Every creature that drops an item, best measured rate first, then this zone's, then by name; nothing is cut. heading
 -- formats the count ("Recipe dropped by %d creature%s" when nil); key names the table
-local function AddDrops(itemID, qs, heading, key)
+local function AddDrops(itemID, qs, heading, key, rates)
     local byNpc, list = {}, {}
     for _, e in ipairs(qs and qs.drops or {}) do
         local entry = { npc = e.npc, name = e.name, level = e.level, rank = e.rank, zones = e.zones, pin = e.pin }
         byNpc[e.npc] = entry
         list[#list + 1] = entry
     end
-    for _, r in ipairs(CS:GetDropRates(itemID) or {}) do
+    if rates == nil then rates = CS:GetDropRates(itemID) end
+    for _, r in ipairs(rates or {}) do
         local entry = byNpc[r.npc]
         if not entry then
             entry = { npc = r.npc, name = r.name, zones = {}, pin = CS:GetPin(r.npc) }
@@ -1043,8 +1062,12 @@ end
 
 -- keep: a redraw of the same recipe (show-more, new bag counts, a list refresh) stays where the reader is
 local shownRecipe
+local function ShownKey()
+    return itemPage and currentItem and ("item:" .. currentItem) or selectedRecipe
+end
+
 function ShowDetail(keep)
-    if not keep or selectedRecipe ~= shownRecipe then wipe(groupNeed) end
+    if not keep or ShownKey() ~= shownRecipe then wipe(groupNeed) end
     wipe(groupDrawn)
     needGrew = false
     DrawDetail(keep)
@@ -1056,11 +1079,122 @@ function ShowDetail(keep)
     end
 end
 
+-- A recipe's reagents as the profession window shows them, two to a line, with what this character and its alts have
+function AddReagents(rec)
+    for i, r in ipairs(rec.r) do
+        local id, qty = r[1], r[2]
+        local name = CS:ItemName(id) or ("item " .. id)
+        local have, alts, bank = CS:ItemCounts(id)
+        local label = (have < qty and RED or "") .. have .. "/" .. qty .. (have < qty and "|r" or "") .. " "
+            .. (id == currentItem and (GOLD .. name .. "|r") or name)
+        -- only when the bags alone fall short: then a bank trip comes before the craft
+        if bank > 0 and have - bank < qty then label = label .. "\n" .. GREY .. bank .. " in your bank|r" end
+        if #alts > 0 then
+            local parts = {}
+            for k = 1, math.min(3, #alts) do parts[k] = alts[k][1] .. " " .. alts[k][2] end
+            label = label .. "\n" .. GREY .. "Alts: " .. table.concat(parts, ", ") .. (#alts > 3 and ", ..." or "") .. "|r"
+        end
+        local slot = AddSlot(id, nil, label)
+        slot.Text:SetMaxLines(3)
+        local col = (i - 1) % 2
+        slot:SetPoint("TOPLEFT", col * REAGENT_COL, cursor)
+        slot.Text:SetWidth(REAGENT_COL - SLOT - 20)
+        if col == 1 or i == #rec.r then cursor = cursor - REAGENT_STEP end
+    end
+end
+
+-- Where to get an item: vendors with prices, creatures with drop rates, gathering and objects, then what this
+-- account has seen
+local function AddWhereToGet(itemID, makersShown)
+    local qs = CS:GetItemSources(itemID)
+    -- rates are built once here; the tables take them (false: none)
+    local drops, gathers = CS:GetDropRates(itemID) or false, CS:GetGatherRates(itemID) or false
+    local any = false
+    local makers = not makersShown and CS:GetMakers(itemID)
+    if makers then
+        cursor = cursor - 6
+        AddRow({ { "|A:cursor_repair_32:18:18|a " .. GOLD .. ("Made by %d recipe%s|r"):format(#makers, #makers == 1 and "" or "s"), DETAIL_W } },
+            { "Click to see the recipes that make it" }, nil, function() Browser:Show("made:" .. itemID) end)
+        any = true
+    end
+    any = AddVendors(itemID, qs, "Sold by %d vendor%s") or any
+    any = AddDrops(itemID, qs, "Drops from %d creature%s", "reagentDrops", drops) or any
+    any = AddGathering(itemID, gathers) or any
+    any = AddObjects(itemID, qs, "Looted from", "reagentObjects", gathers) or any
+    local seen = {}
+    for _, l in ipairs(CS:SourceLines(itemID, 50)) do
+        seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
+    end
+    if #seen > 0 then
+        AddHeading("Where you found it", "inspect")
+        AddTable(nil, seen, { nil, "RIGHT" }, "seen")
+    elseif not any then
+        AddText(GREY .. "No source recorded yet.|r")
+    end
+end
+
+-- How to make an item: each recipe, known first, with its reagents; a click opens it among the item's makers
+local MAKERS_SHOWN = 3
+function AddMakers(itemID, makers)
+    AddSection(#makers == 1 and "How to make it" or ("%d ways to make it"):format(#makers))
+    for i = 1, math.min(#makers, MAKERS_SHOWN) do
+        local recipeID = makers[i]
+        local rec = CS.recipes[recipeID]
+        local prof, text, right, skillUp = CS:RecipeLine(recipeID)
+        local name = (skillUp and ("|A:" .. skillUp .. ":15:13|a ") or "") .. text
+            .. (rec.q and rec.q > 1 and (GREY .. " x" .. rec.q .. "|r") or "") .. (right and (" " .. right) or "")
+        AddRow({ { name, DETAIL_W - 130 }, { GREY .. prof .. "|r", 130, "RIGHT" } }, { rec.n or "?", "Click to open this recipe" },
+            nil, function()
+                selectedRecipe = recipeID
+                Browser:Show("made:" .. itemID)
+            end)
+        cursor = cursor - 4
+        AddReagents(rec)
+    end
+    if #makers > MAKERS_SHOWN then
+        AddRow({ { GOLD .. ("Show all %d recipes|r"):format(#makers), DETAIL_W } }, nil, nil,
+            function() Browser:Show("made:" .. itemID) end)
+    end
+end
+
+-- The item's own page: what you carry, how to make it, and where to get it
+local function DrawItemPage(itemID)
+    FillSlot(detail.Output, itemID)
+    local color = QualityColor(itemID)
+    detail.Name:SetText(CS:ItemName(itemID) or ("item " .. itemID))
+    if color then detail.Name:SetTextColor(color.r, color.g, color.b) else detail.Name:SetTextColor(1, 1, 1) end
+    local uses, taught = CS:GetUses(itemID), CS:GetTaught(itemID)
+    detail.Sub:SetText(uses and ("Used in %d recipe%s"):format(#uses, #uses == 1 and "" or "s")
+        or taught and ("Teaches " .. (CS.recipes[taught[1]].n or "a recipe") .. (#taught > 1 and (" and %d more"):format(#taught - 1) or ""))
+        or (GREY .. "Not used in any recipe you can learn|r"))
+    cursor = -6 - SLOT
+    local have, alts, bank = CS:ItemCounts(itemID)
+    AddSection("You have")
+    AddText(have == 0 and (GREY .. "None on this character|r")
+        or bank > 0 and ("%d in your bags, %d in your bank"):format(have - bank, bank) or ("%d in your bags"):format(have))
+    if #alts > 0 then
+        local parts = {}
+        for k = 1, #alts do parts[k] = alts[k][1] .. " " .. alts[k][2] end
+        AddText(GREY .. "Alts: " .. table.concat(parts, ", ") .. "|r")
+    end
+    local makers = CS:GetMakers(itemID)
+    if makers then AddMakers(itemID, makers) end
+    AddSection("Where to get it")
+    AddWhereToGet(itemID, makers ~= nil)
+    content:SetHeight(-cursor + 12)
+end
+
 function DrawDetail(keep)
-    keep = keep and selectedRecipe == shownRecipe
-    shownRecipe = selectedRecipe
+    local key = ShownKey()
+    keep = keep and key == shownRecipe
+    shownRecipe = key
     if not keep then wipe(expanded) end
     ResetDetail()
+    if itemPage and currentItem then
+        detail.Background:SetAtlas("Professions-Recipe-Background")
+        if not keep then detail.scroll:SetVerticalScroll(0) end
+        return DrawItemPage(currentItem)
+    end
     local rec = selectedRecipe and CS.recipes[selectedRecipe]
     local atlas = rec and rec.p and ("Professions-Recipe-Background-" .. rec.p:gsub("%s", ""))
     if not (atlas and C_Texture.GetAtlasInfo(atlas)) then atlas = "Professions-Recipe-Background" end
@@ -1105,57 +1239,14 @@ function DrawDetail(keep)
     cursor = -6 - SLOT
 
     AddSection("Reagents")
-    for i, r in ipairs(rec.r) do
-        local id, qty = r[1], r[2]
-        local name = CS:ItemName(id) or ("item " .. id)
-        local have, alts, bank = CS:ItemCounts(id)
-        local label = (have < qty and RED or "") .. have .. "/" .. qty .. (have < qty and "|r" or "") .. " "
-            .. (id == currentItem and (GOLD .. name .. "|r") or name)
-        -- only when the bags alone fall short: then a bank trip comes before the craft
-        if bank > 0 and have - bank < qty then label = label .. "\n" .. GREY .. bank .. " in your bank|r" end
-        if #alts > 0 then
-            local parts = {}
-            for k = 1, math.min(3, #alts) do parts[k] = alts[k][1] .. " " .. alts[k][2] end
-            label = label .. "\n" .. GREY .. "Alts: " .. table.concat(parts, ", ") .. (#alts > 3 and ", ..." or "") .. "|r"
-        end
-        local slot = AddSlot(id, nil, label)
-        slot.Text:SetMaxLines(3)
-        local col = (i - 1) % 2
-        slot:SetPoint("TOPLEFT", col * REAGENT_COL, cursor)
-        slot.Text:SetWidth(REAGENT_COL - SLOT - 20)
-        if col == 1 or i == #rec.r then cursor = cursor - REAGENT_STEP end
-    end
+    AddReagents(rec)
 
     AddLearn(selectedRecipe, rec)
 
-    -- the looked-up reagent: vendors with prices, creatures with drop rates, objects, then what this account has seen
-    if currentItem and not madeView then
-        local name = CS:ItemName(currentItem) or "it"
-        local qs = CS:GetItemSources(currentItem)
-        AddSection("Where to get " .. name)
-        local any = false
-        local makers = CS:GetMakers(currentItem)
-        if makers then
-            local id = currentItem
-            cursor = cursor - 6
-            AddRow({ { "|A:cursor_repair_32:18:18|a " .. GOLD .. ("Made by %d recipe%s|r"):format(#makers, #makers == 1 and "" or "s"), DETAIL_W } },
-                { "Click to see the recipes that make it" }, nil, function() Browser:Show("made:" .. id) end)
-            any = true
-        end
-        any = AddVendors(currentItem, qs, "Sold by %d vendor%s") or any
-        any = AddDrops(currentItem, qs, "Drops from %d creature%s", "reagentDrops") or any
-        any = AddGathering(currentItem) or any
-        any = AddObjects(currentItem, qs, "Looted from", "reagentObjects") or any
-        local seen = {}
-        for _, l in ipairs(CS:SourceLines(currentItem, 50)) do
-            seen[#seen + 1] = { cells = { l[2], GREY .. l[1] .. "|r" }, tip = { l[2] } }
-        end
-        if #seen > 0 then
-            AddHeading("Where you found it", "inspect")
-            AddTable(nil, seen, { nil, "RIGHT" }, "seen")
-        elseif not any then
-            AddText(GREY .. "No source recorded yet.|r")
-        end
+    -- the looked-up reagent's sources under the recipe that uses it
+    if currentItem and not madeView and CS.ReagentQty(rec, currentItem) then
+        AddSection("Where to get " .. (CS:ItemName(currentItem) or "it"))
+        AddWhereToGet(currentItem)
     end
     content:SetHeight(-cursor + 12)
 end
@@ -1507,19 +1598,34 @@ local function ItemView(itemID)
     if not C_Item.GetItemNameByID(itemID) then C_Item.RequestLoadItemDataByID(itemID) end
     currentItem = itemID
     local uses = CS:GetUses(itemID)
-    local list = ProfessionSections(uses, itemID)
+    -- a recipe item lists the recipes it teaches instead
+    local taught = not uses and CS:GetTaught(itemID)
+    -- reagents and recipe items get a page of their own, opened on a new lookup; a redraw stays on what the reader
+    -- picked. Other items have no source data, so they get none.
+    local hasPage = CS.usedIn[itemID] ~= nil or CS.recipeItems[itemID] ~= nil
+    local page = hasPage and (wasPage or not renderKeep)
+    local list = ProfessionSections(uses or taught or nil, uses and itemID or nil)
+    itemPage = page
+    if page then selectedRecipe = nil end
+    if hasPage then
+        table.insert(list, 1, { page = true, itemID = itemID, icon = C_Item.GetItemIconByID(itemID), left = "Where to get it" })
+        table.insert(list, 2, { spacer = true })
+    end
     local n, nProfs, seen = uses and #uses or 0, 0, {}
     -- the heading counts every recipe, filtered out or not
     for _, id in ipairs(uses or {}) do
         local p = CS.recipes[id].p or "?"
         if not seen[p] then seen[p], nProfs = true, nProfs + 1 end
     end
-    SetHeading(C_Item.GetItemIconByID(itemID), CS:ItemName(itemID) or ("item " .. itemID),
-        n > 0 and ("Used in %d recipe%s across %d profession%s"):format(n, n == 1 and "" or "s", nProfs, nProfs == 1 and "" or "s")
-            or (CS.usedIn[itemID] and "Only used in recipes the opposite faction learns" or "Not used in any recipe"), itemID)
-    if #list == 0 then
-        if n > 0 then return nil, FILTERED end
-        return nil, CS.usedIn[itemID] and "Only used in recipes the opposite faction learns." or "No recipe uses this item."
+    local sub = n > 0 and ("Used in %d recipe%s across %d profession%s"):format(n, n == 1 and "" or "s", nProfs, nProfs == 1 and "" or "s")
+        or taught and ("Teaches %d %s recipe%s"):format(#taught, CS.recipes[taught[1]].p or "", #taught == 1 and "" or "s")
+        or CS.recipeItems[itemID] and "Teaches no recipe you can learn"
+        or (CS.usedIn[itemID] and "Only used in recipes the opposite faction learns" or "Not used in any recipe")
+    SetHeading(C_Item.GetItemIconByID(itemID), CS:ItemName(itemID) or ("item " .. itemID), sub, itemID)
+    if #list == (hasPage and 2 or 0) then
+        if n > 0 or taught then return list, FILTERED end
+        if CS.recipeItems[itemID] then return list, "Only the opposite faction can learn what this teaches." end
+        return list, CS.usedIn[itemID] and "Only used in recipes the opposite faction learns." or "No recipe uses this item."
     end
     return list
 end
@@ -1543,6 +1649,8 @@ end
 
 local function BuildView(query)
     currentItem, madeView, picking, homeKeep = nil, false, false, false
+    -- only the item view shows the item page, and it reads whether the page was up
+    wasPage, itemPage = itemPage, false
     wipe(viewRecipes)
     if query == "" then return WelcomeView() end
     local made = tonumber(query:match("^made:(%d+)$"))
@@ -1559,10 +1667,13 @@ local function BuildView(query)
 end
 
 function Render(keepScroll)
+    renderKeep = keepScroll
     local list, message = BuildView(currentQuery)
     if not currentItem and not picking and not (keepScroll and homeKeep) then selectedRecipe = nil end
     scrollBox:SetDataProvider(CreateDataProvider(list or {}),
         keepScroll and ScrollBoxConstants.RetainScrollPosition or ScrollBoxConstants.DiscardScrollPosition)
+    -- under the item page row when there is one, clear of it
+    listEmpty:SetPoint("TOP", 0, list and #list > 0 and -95 or -60)
     listEmpty:SetText(message or "")
     ShowDetail(keepScroll)
 end

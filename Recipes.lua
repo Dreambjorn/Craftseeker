@@ -923,6 +923,11 @@ function CS:GetMakers(itemID)
     return Obtainable(self, self.madeBy[itemID])
 end
 
+-- The recipes a recipe item (pattern, plans, schematic...) teaches that this character can get
+function CS:GetTaught(itemID)
+    return Obtainable(self, self.recipeItems[itemID])
+end
+
 function CS.ReagentQty(rec, itemID)
     for _, r in ipairs(rec.r or {}) do
         if r[1] == itemID then return r[2], r[3] end
