@@ -122,7 +122,7 @@ SOFTWARE.
 
 - Used in: `BUILTIN_QUESTS` (quest names, givers and places), `BUILTIN_ITEM_SOURCES`, `BUILTIN_OBJECTS` and `BUILTIN_REWARDS` (where recipe items and reagents come from),
   creature names in `BUILTIN_NAMES`, factions in `BUILTIN_LEVELS`, `BUILTIN_PLACES` (instance names and places) and the map pins in `BUILTIN_PINS`
-  that EG Link has no position for.
+  that EG Link has no position for, and the fishing zones in `BUILTIN_FISH`.
 
 ## WhatsTraining
 
@@ -154,9 +154,11 @@ SOFTWARE.
 
 - Used in: `BUILTIN_SOURCES` (how each recipe is learned) and the list of which recipes exist on Forever.
 
-A recipe is kept only with proof that it exists on Forever: one of the sources above, a Forever addition the
-Classic Era client lacks, or both WoW Forever Tools and ForeverRecipes naming it with how it is learned. Of
-those two lists only the recipe IDs are checked; nothing of them is shipped.
+A recipe or class spell shows only with proof that it exists on Forever: one of the sources above, a Forever
+addition the Classic Era client lacks, both WoW Forever Tools and ForeverRecipes naming it with how it is
+learned, its recipe item listed on a Forever auction house, or players finding it in game. Of those lists and
+listings only the IDs are checked; nothing of them is shipped. The rest ship hidden, in `BUILTIN_UNCONFIRMED`,
+until the game proves them.
 
 ## Game client
 

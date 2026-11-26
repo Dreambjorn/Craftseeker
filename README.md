@@ -97,7 +97,7 @@ With [QuestieDB](https://github.com/Questie/QuestieDB) installed, Craftseeker al
 - Recipe sources: WhatsTraining, https://github.com/fusionpit/WhatsTraining (MIT).
 - Trainers, vendors and creature names: Data from Efficient Games (https://efficient.games), licensed under CC BY 4.0.
 - Creature places, quest names and givers, fishing zones: AllTheThings, https://github.com/ATTWoWAddon/AllTheThings (MIT).
-- Libraries: Ace3, LibDataBroker, LibDBIcon, ChatThrottleLib and LibDeflate, each under its own licence in `Libs`.
+- Libraries: Ace3, LibDataBroker, LibDBIcon, ChatThrottleLib and LibDeflate, each under its own licence in its `Libs` folder or file header; LibDataBroker states none.
 - Full notices: `LICENSE-DATA.md`.
 
 ## License
