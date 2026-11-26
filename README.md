@@ -37,7 +37,7 @@ The start page lists your favorite and tracked recipes, then the reagents in you
 
 ---
 
-Drop rates improve as you play. Every loot, gathered node and catch is counted and shared with other Craftseeker users online. It also reads the counts Drop Tables and Forever Drops users share.
+Drop rates improve as you play. Every loot, gathered node and catch is counted and shared with other Craftseeker users online.
 
 <img alt="Drop rates by creature and the containers a reagent comes from" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/source-tables.webp" />
 
