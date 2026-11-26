@@ -24,7 +24,7 @@ local expanded = {}  -- [table] = true: shown in full, until another recipe is p
 local listedAll = {} -- [section or category key] = true: its list rows shown in full, until a new lookup
 local LIST_ROWS = 25 -- list rows a section or category shows before its "Show all" row
 local madeView       -- the list shows the recipes that make currentItem, not those that use it
-local picking        -- search results with recipes in them: the first one is shown on the right
+local picking        -- search results with recipes in them: one the player picks stays on the right
 local AddSkill
 local TABLE_ROWS = 10
 local Render, ShowDetail, DrawDetail
@@ -1861,14 +1861,15 @@ local function PickerView(hits, uses, items, profs, recipes, query)
     end
     ItemSection("Reagents", hits, function(id) return uses[id] .. " recipe" .. (uses[id] == 1 and "" or "s") end)
     ItemSection("Recipe items", items, function(id) return profs[id] end)
-    for _, row in ipairs(ProfessionSections(recipes)) do list[#list + 1] = row end
+    for _, row in ipairs(ProfessionSections(recipes, nil, true)) do list[#list + 1] = row end
     if #list == 0 then return nil, FILTERED end
     return list
 end
 
 -- Recipes in one section per profession, in the order given; reagentID tags optional reagents
 local viewRecipes = {} -- every recipe the view holds, filtered out or folded away too: bag changes redraw for these
-function ProfessionSections(ids, reagentID)
+-- pickNone: a search, whose pane shows How to use until a recipe is clicked
+function ProfessionSections(ids, reagentID, pickNone)
     local list, first = {}, nil
     local byProf, profs = {}, {}
     for _, id in ipairs(ids or {}) do viewRecipes[id] = true end
@@ -1943,7 +1944,7 @@ function ProfessionSections(ids, reagentID)
     -- keep the selected recipe when it is still listed
     local keep = false
     for _, id in ipairs(ids or {}) do if id == selectedRecipe then keep = true end end
-    if not keep then selectedRecipe = first end
+    if not keep then selectedRecipe = not pickNone and first or nil end
     return list, #profs
 end
 
@@ -2017,6 +2018,8 @@ local function BuildView(query)
     local recipes = CS:SearchRecipesByName(query)
     if #hits + #items == 1 and #recipes == 0 then return ItemView(hits[1] or items[1]) end
     picking = #recipes > 0
+    -- a new search starts on How to use; a redraw or Back keeps the recipe the player picked
+    if not (renderKeep or restoring) then selectedRecipe = nil end
     return PickerView(hits, uses, items, profs, recipes, query)
 end
 
