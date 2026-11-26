@@ -331,7 +331,15 @@ local function Build()
     win:EnableMouse(true)
     win:RegisterForDrag("LeftButton")
     win:SetScript("OnDragStart", win.StartMoving)
-    win:SetScript("OnDragStop", win.StopMovingOrSizing)
+    win:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        CS.data.settings.profilerAt = { self:GetLeft(), self:GetTop() }
+    end)
+    local at = CS.data.settings.profilerAt
+    if at then
+        win:ClearAllPoints()
+        win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", at[1], at[2])
+    end
     -- above the browser window, which sits in HIGH
     win:SetFrameStrata("DIALOG")
     win:SetToplevel(true)
@@ -455,6 +463,7 @@ function Profiler:SetMinimized(on)
     local left, top = win:GetLeft(), win:GetTop()
     win:ClearAllPoints()
     win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    CS.data.settings.profilerAt = { left, top }
     win:SetHeight(on and 120 or 560) -- shorter, the portrait corner's art runs into the bottom corner's
     win.minimized = on
     win.Panel:SetShown(not on)
