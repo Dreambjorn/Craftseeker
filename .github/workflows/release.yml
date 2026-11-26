@@ -1,0 +1,98 @@
+name: Release
+
+# Run it from the Actions tab to tag the TOC version on main and publish it, or push that tag yourself.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_PROJECT_ID: "1828748"
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the version from the TOC
+        run: |
+          version=$(sed -n 's/^## Version: *\([^[:space:]]*\).*/\1/p' Craftseeker.toc)
+          interface=$(sed -n 's/^## Interface: *\([0-9]*\).*/\1/p' Craftseeker.toc)
+          if [ -z "$version" ] || [ -z "$interface" ]; then
+            echo "::error::Craftseeker.toc lacks a Version or Interface line"; exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "INTERFACE=$interface" >> "$GITHUB_ENV"
+
+      - name: Tag the release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Run the release from main"; exit 1
+          fi
+          # A rerun finds its own tag on this commit and carries on
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            if [ "$(git rev-list -n 1 "$VERSION")" != "$(git rev-parse HEAD)" ]; then
+              echo "::error::Tag $VERSION already exists on another commit; bump the TOC version first"; exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$VERSION" -m "$VERSION"
+            git push origin "$VERSION"
+          fi
+
+      - name: Check the tag matches the TOC
+        if: github.event_name == 'push'
+        run: |
+          if [ "$GITHUB_REF_NAME" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the TOC version $VERSION"; exit 1
+          fi
+
+      - name: Write the release notes
+        run: |
+          python3 .github/scripts/release_notes.py --version "$VERSION" \
+            --issues "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/issues" \
+            --markdown CHANGELOG.md --html "$RUNNER_TEMP/changelog.html" --bbcode "$RUNNER_TEMP/changelog.bbcode"
+          cat CHANGELOG.md
+
+      # Builds the zip and publishes it to GitHub, and to Wago once its project ID is set
+      - name: Package and publish to GitHub and Wago
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -u ${{ vars.WAGO_PROJECT_ID && format('-a {0}', vars.WAGO_PROJECT_ID) || '' }}
+        env:
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The packager's CurseForge upload can't take the HTML notes, so this one is done here
+      - name: Upload to CurseForge
+        if: env.CF_API_TOKEN != ''
+        run: |
+          api=https://wow.curseforge.com/api
+          game=$(curl -fsS -H "X-Api-Token: $CF_API_TOKEN" "$api/game/versions" | jq --arg i "$INTERFACE" \
+            '[.[] | select(.gameVersionTypeID == 88568 and .apiVersion == $i)] | if length == 1 then .[0].id else error("no single Forever game version for interface \($i)") end')
+          jq -n --rawfile notes "$RUNNER_TEMP/changelog.html" --argjson game "$game" --arg name "Craftseeker-$VERSION.zip" \
+            '{changelog: $notes, changelogType: "html", displayName: $name, gameVersions: [$game], releaseType: "release"}' > "$RUNNER_TEMP/metadata.json"
+          curl -fsS -H "X-Api-Token: $CF_API_TOKEN" -F "metadata=<$RUNNER_TEMP/metadata.json" \
+            -F "file=@.release/Craftseeker-$VERSION.zip" "$api/projects/$CF_PROJECT_ID/upload-file"
+
+      # The packager skips Forever on WoWInterface, though the site lists it
+      - name: Upload to WoWInterface
+        if: env.WOWI_API_TOKEN != '' && vars.WOWI_ADDON_ID != ''
+        run: |
+          compatible=$(curl -fsS https://api.wowinterface.com/addons/compatible.json | jq -r --arg i "$INTERFACE" \
+            '[.[] | select(.game == "Forever" and .interface == $i) | .id] | if length == 1 then .[0] else error("no single Forever version for interface \($i)") end')
+          code=$(curl -sS -w "%{http_code}" -o "$RUNNER_TEMP/wowi.json" -H "x-api-token: $WOWI_API_TOKEN" \
+            -F "id=${{ vars.WOWI_ADDON_ID }}" -F "version=$VERSION" -F "compatible=$compatible" \
+            -F "changelog=<$RUNNER_TEMP/changelog.bbcode" -F "updatefile=@.release/Craftseeker-$VERSION.zip" \
+            https://api.wowinterface.com/addons/update)
+          cat "$RUNNER_TEMP/wowi.json"; echo
+          [ "$code" = 202 ] || { echo "::error::WoWInterface answered HTTP $code"; exit 1; }
