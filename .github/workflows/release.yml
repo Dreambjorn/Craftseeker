@@ -68,7 +68,8 @@ jobs:
       - name: Package and publish to GitHub and Wago
         uses: BigWigsMods/packager@v2
         with:
-          args: -u ${{ vars.WAGO_PROJECT_ID && format('-a {0}', vars.WAGO_PROJECT_ID) || '' }}
+          # the file and its label carry the version alone; by default a Forever build adds "-forever" to both
+          args: -u -n "{package-name}-{project-version}:{project-version}" ${{ vars.WAGO_PROJECT_ID && format('-a {0}', vars.WAGO_PROJECT_ID) || '' }}
         env:
           GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
