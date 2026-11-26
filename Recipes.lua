@@ -346,6 +346,7 @@ end
 -- Rebuilt only after new counts; a lookup touches just the sources of the item.
 --   index[itemID] = { [key] = { kind = "k"/"g", id, p, n, k = times, drops, own } }; ours apart, like the drops
 local sharedGather, dtGather, fdGather, ownGather, ownGatherFor
+local gatherStamp = 0 -- grows whenever any gathering index is rebuilt
 local gatherFor = {} -- [source] = the version its index was built for
 local builtinGather, builtinSkins, liveSkinItems -- built-in index, most skins per creature, live skins over it
 local measuredGather -- [itemID] = { [key] = built-in entry Craftseeker users measured }, kept apart from the live counts
@@ -374,6 +375,7 @@ end
 local function BuildGather(self)
     if ownGatherFor ~= self.ownVersion or not ownGather then
         ownGatherFor, ownGather = self.ownVersion, {}
+        gatherStamp = gatherStamp + 1
         for kind, book in pairs(self.data.gather) do
             for id, e in pairs(book) do AddGather(ownGather, kind, id, e, true) end
         end
@@ -401,6 +403,7 @@ local function BuildGather(self)
         end
     end
     if Stale(self, gatherFor, "shared") then
+        gatherStamp = gatherStamp + 1
         sharedGather = {}
         for _, peer in pairs(self.data.shared) do
             for kind, book in pairs(peer.gather or {}) do
@@ -411,6 +414,7 @@ local function BuildGather(self)
     -- Drop Tables users' live skinning replaces a creature's built-in figure once it holds more skins, never adds:
     -- the database holds the same installs
     if Stale(self, gatherFor, "dt") then
+        gatherStamp = gatherStamp + 1
         dtGather, liveSkinItems = {}, {}
         for npc, origins in pairs(self.data.bridges.dtSkins or {}) do
             local live, items = 0, {}
@@ -425,6 +429,7 @@ local function BuildGather(self)
         end
     end
     if Stale(self, gatherFor, "fd") then
+        gatherStamp = gatherStamp + 1
         fdGather = {}
         for _, peer in pairs(self.data.bridges.fd) do
             for kind, book in pairs(peer.gather or {}) do
@@ -435,7 +440,7 @@ local function BuildGather(self)
 end
 
 -- Where an item is gathered: { { kind, id, p = profession, n = name, k = times, drops, chance %, own }, ... }, best first
-function CS:GetGatherRates(itemID)
+local function GatherRates(self, itemID)
     BuildGather(self)
     local merged = {}
     for _, index in ipairs({ sharedGather, dtGather, fdGather, ownGather }) do
@@ -478,6 +483,23 @@ function CS:GetGatherRates(itemID)
     if #out == 0 then return nil end
     table.sort(out, function(a, b) return a.chance > b.chance end)
     return out
+end
+
+-- Kept per item until a gathering index is rebuilt: a pane redraws on every loot and asks again. The browser fills in
+-- a row's name and places on these entries, which stay right for as long as the counts do.
+local gatherCache, gatherVersion = {}, nil
+function CS:GetGatherRates(itemID)
+    BuildGather(self)
+    if gatherVersion ~= gatherStamp then
+        wipe(gatherCache)
+        gatherVersion = gatherStamp
+    end
+    local hit = gatherCache[itemID]
+    if hit == nil then
+        hit = GatherRates(self, itemID) or false
+        gatherCache[itemID] = hit
+    end
+    return hit or nil
 end
 
 function CS.PlayerFaction()
@@ -559,8 +581,21 @@ end
 
 local SEEN_RANK = { "Elite", "Rare Elite", "Boss", "Rare" }
 
--- What we and other Craftseeker users saw of a creature: name, "lo-hi" level, zones (most seen first), pin
+-- What we and other Craftseeker users saw of a creature: name, "lo-hi" level, zones (most seen first), pin.
+-- Kept until counts change or we learn the creature again: a table can ask for hundreds of creatures per redraw.
+local seenCache, seenVersion = {}, nil
+
+function CS:ForgetSeenNpc(npc)
+    seenCache[npc] = nil
+end
+
 function CS:SeenNpc(npc)
+    if seenVersion ~= self.countsVersion then
+        wipe(seenCache)
+        seenVersion = self.countsVersion
+    end
+    local hit = seenCache[npc]
+    if hit then return hit end
     local own = self.data.npcs[npc]
     local name, lo, hi, pin, times = own and own.n, own and own.lo, own and own.hi, own and own.p, {}
     local rank, faction = own and own.r, own and own.f
@@ -578,8 +613,10 @@ function CS:SeenNpc(npc)
     for zone in pairs(times) do zones[#zones + 1] = zone end
     table.sort(zones, function(a, b) return times[a] > times[b] end)
     local level = lo and (hi and hi > lo and (lo .. "-" .. hi) or tostring(lo)) or nil
-    return { name = name, level = level, zones = zones, pin = pin and { pin[1], pin[2] / 1000, pin[3] / 1000 },
+    hit = { name = name, level = level, zones = zones, pin = pin and { pin[1], pin[2] / 1000, pin[3] / 1000 },
         rank = SEEN_RANK[rank or 0], faction = faction }
+    seenCache[npc] = hit
+    return hit
 end
 
 function CS:SeenNpcName(npc)

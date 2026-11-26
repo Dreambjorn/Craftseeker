@@ -91,6 +91,7 @@ local function Learn(npc, name, level, near, unit)
         end
     end
     if news then CS.data.countsStamp = time() end
+    CS:ForgetSeenNpc(npc)
 end
 CS.LearnNpc = Learn
 
