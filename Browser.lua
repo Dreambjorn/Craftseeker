@@ -33,7 +33,12 @@ local FILTERED = "No recipe matches the filters."
 local SKILL_ORDER = { orange = 1, yellow = 2, green = 3, grey = 4, none = 5, learn = 6 }
 local FAVORITES = "Favorites" -- the first section, like the profession window's
 
+local hoverAt, refreshing = 0, false -- a fresh hover, apart from the compare refresh below setting it again
 local function ShowItemTooltip(self)
+    if not refreshing then
+        hoverAt = hoverAt + 1
+        self.hoverAt, self.refreshes = hoverAt, 0
+    end
     if self.itemID then
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetItemByID(self.itemID)
@@ -2107,6 +2112,25 @@ function Browser:GET_ITEM_INFO_RECEIVED(_, itemID, success)
     end)
 end
 
+-- The compare tooltips never refresh on their own: when data one waits for arrives, the hovered item is set again.
+-- Twice a hover at most: setting it again asks the compare data anew, and its answer would set it again for good.
+local REFRESHES = 2
+function Browser:TOOLTIP_DATA_UPDATE(_, dataInstanceID)
+    if not dataInstanceID or CS.IsSecret(dataInstanceID) then return end
+    local owner = GameTooltip:GetOwner()
+    if not (owner and owner.itemID and owner:GetScript("OnEnter") == ShowItemTooltip) then return end
+    if owner.hoverAt ~= hoverAt or (owner.refreshes or 0) >= REFRESHES then return end
+    for _, tip in ipairs({ ShoppingTooltip1, ShoppingTooltip2 }) do
+        if tip and tip:IsShown() and tip:HasDataInstanceID(dataInstanceID) then
+            owner.refreshes = (owner.refreshes or 0) + 1
+            refreshing = true
+            ShowItemTooltip(owner)
+            refreshing = false
+            return
+        end
+    end
+end
+
 -- Skill ranks or tracked recipes: redraw where the reader is
 function Browser:ItemsChanged()
     if f and f:IsShown() then Render(true) end
@@ -2180,6 +2204,7 @@ function Browser:OnEnable()
     -- loot and shared counts come in bursts; one redraw every few seconds at most
     self:RegisterBucketMessage("CRAFTSEEKER_COUNTS", 3, "CountsChanged")
     self:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    self:RegisterEvent("TOOLTIP_DATA_UPDATE")
     -- Alt+Click any item (bags, bank, loot...) to look it up; Shift+Click drops it into a focused search box
     hooksecurefunc("HandleModifiedItemClick", function(link)
         if not link or CS.IsSecret(link) or not link:find("item:") then return end
