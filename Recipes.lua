@@ -748,8 +748,10 @@ CS.missingNames = {} -- [itemID] = true: shown before the client had its name
 function CS:ItemName(itemID)
     local name = C_Item.GetItemNameByID(itemID)
     if name then return name end
-    self.missingNames[itemID] = true
     local baked = self.BUILTIN_ITEMS and self.BUILTIN_ITEMS[itemID]
+    -- The name lookup never loads an uncached item, so without a request no name arrives to redraw with
+    if not baked and not self.missingNames[itemID] then C_Item.RequestLoadItemDataByID(itemID) end
+    self.missingNames[itemID] = true
     return baked and baked[1]
 end
 
