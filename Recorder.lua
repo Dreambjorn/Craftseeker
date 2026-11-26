@@ -256,7 +256,7 @@ function Recorder:LOOT_READY()
     local fishing = IsFishingLoot()
     local gathering = lastGather and now - lastGather.at < GATHER_WINDOW and lastGather.prof or nil
     lastGather = nil
-    local opened, gathered, placed = {}, {}, {}
+    local opened, gathered, placed, fished = {}, {}, {}, false
     for slot = 1, GetNumLootItems() do
         local link = GetLootSlotLink(slot)
         local itemID = link and CS.ItemIDFromText(link)
@@ -281,7 +281,10 @@ function Recorder:LOOT_READY()
             end
             if counted and CS.usedIn[counted] then
                 if fishing then
-                    if i == 1 then Bump(Bucket(counted, "fish"), Zone()) end
+                    if i == 1 then
+                        Bump(Bucket(counted, "fish"), Zone())
+                        fished = true
+                    end
                 else
                     RecordSource(counted, guid, gathering)
                 end
@@ -305,7 +308,7 @@ function Recorder:LOOT_READY()
         end
     end
     for guid in pairs(opened) do looted["d" .. guid] = now end
-    if next(opened) or next(gathered) then
+    if next(opened) or next(gathered) or fished then
         CS.data.countsStamp = time()
         CS:CountsChanged(true)
     end

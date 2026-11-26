@@ -146,6 +146,14 @@ function Share:Serialize()
         for zone, n in pairs(zones) do fields[#fields + 1] = Escape(zone) .. ":" .. n end
         Add(fields)
     end
+    -- fishing as "h<item>,zone:catches,...", zone names escaped (older versions skip it)
+    for item, s in pairs(CS.data.sources) do
+        if s.fish and next(s.fish) then
+            local fields = { "h" .. item }
+            for zone, n in pairs(s.fish) do fields[#fields + 1] = Escape(zone) .. ":" .. n end
+            Add(fields)
+        end
+    end
     -- quests as "q<quest>,name,giver,factions,item,...", for quests rewarding reagents or recipe items
     for id, q in pairs(CS.data.quests) do
         local fields = { "q" .. id, Escape(q.n or ""), q.g or 0, q.s or 0 }
@@ -177,7 +185,7 @@ end
 -- corpses each, prices below 10,000 gold
 function Share.Parse(text)
     local counts, prices, objects, objectPins, npcs, gather, quests = {}, {}, {}, {}, {}, { k = {}, g = {}, c = {} }, {}
-    local proven, nProven = {}, 0
+    local proven, nProven, fish = {}, 0, {}
     for entry in text:gmatch("[^;]+") do
         local fields = { strsplit(",", entry) }
         if fields[1] == "pr" then
@@ -206,6 +214,8 @@ function Share.Parse(text)
             objectPins[object] = ParsePin(fields[2])
             objects[object] = ParseZones(fields, 3, MAX_OPENED)
         end
+        local fished = tonumber(fields[1]:match("^h(%d+)$"))
+        if fished then fish[fished] = ParseZones(fields, 2, MAX_OPENED) end
         local npc = tonumber(fields[1]:match("^n(%d+)$"))
         if npc and #fields >= 5 then
             local lo, hi = tonumber(fields[3]), tonumber(fields[4])
@@ -253,7 +263,7 @@ function Share.Parse(text)
             counts[npc] = c
         end
     end
-    return counts, prices, objects, objectPins, npcs, gather, quests, proven
+    return counts, prices, objects, objectPins, npcs, gather, quests, proven, fish
 end
 
 -- Keeps the newest MAX_PEERS installs and drops those not heard from in a month
@@ -460,9 +470,10 @@ function Share:OnMessage(msg, chatType, sender, bnAccount)
             end
             Tally(heard.data, chatType)
             CS:Debug("counts received from %s (%s, install %s)", tostring(sender or bnAccount), chatType, install)
-            local counts, prices, objects, objectPins, npcs, gather, quests, proven = Share.Parse(text)
+            local counts, prices, objects, objectPins, npcs, gather, quests, proven, fish = Share.Parse(text)
             shared[install] = { stamp = stamp, from = sender, at = time(), counts = counts, prices = prices,
-                objects = objects, objectPins = objectPins, npcs = npcs, gather = gather, quests = quests, proven = proven }
+                objects = objects, objectPins = objectPins, npcs = npcs, gather = gather, quests = quests, proven = proven,
+                fish = fish }
             Share.Trim()
             CS:CountsChanged(false, "shared")
         end
