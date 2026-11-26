@@ -312,7 +312,9 @@ local function Build()
     win:RegisterForDrag("LeftButton")
     win:SetScript("OnDragStart", win.StartMoving)
     win:SetScript("OnDragStop", win.StopMovingOrSizing)
-    win:SetFrameStrata("HIGH")
+    -- above the browser window, which sits in HIGH
+    win:SetFrameStrata("DIALOG")
+    win:SetToplevel(true)
     win:SetClampedToScreen(true)
     win:SetTitle("Craftseeker profiler")
     win:SetPortraitToAsset("Interface\\Icons\\INV_Misc_PocketWatch_01")
@@ -327,6 +329,7 @@ local function Build()
     clean:SetSize(BUTTON_W, 22)
     clean:SetPoint("RIGHT", toggle, "LEFT", -6, 0)
     clean:SetText("Clean up")
+    win.Clean = clean
     -- a full collection stalls a frame, so it runs only on request
     clean:SetScript("OnClick", function()
         collectgarbage("collect")
@@ -336,6 +339,7 @@ local function Build()
     end)
 
     local panel = CreateFrame("Frame", nil, win)
+    win.Panel = panel
     panel:SetPoint("TOPLEFT", 5, -72)
     panel:SetPoint("BOTTOMRIGHT", -5, 5)
     local bg = panel:CreateTexture(nil, "BACKGROUND")
@@ -406,6 +410,24 @@ local function Build()
         end
     end)
     win:SetScript("OnHide", function() Profiler:Stop() end)
+
+    -- the title bar's minimize button, as the profession window has; minimized, only the live numbers stay
+    local size = CreateFrame("Frame", nil, win, "MaximizeMinimizeButtonFrameTemplate")
+    size:SetPoint("RIGHT", win.CloseButton, "LEFT", 0, 0)
+    size:SetOnMinimizedCallback(function() Profiler:SetMinimized(true) end)
+    size:SetOnMaximizedCallback(function() Profiler:SetMinimized(false) end)
+end
+
+-- The top edge stays put while the window grows or shrinks under it
+function Profiler:SetMinimized(on)
+    local left, top = win:GetLeft(), win:GetTop()
+    win:ClearAllPoints()
+    win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    win:SetHeight(on and 76 or 560)
+    win.Panel:SetShown(not on)
+    win.Clean:SetShown(not on)
+    win.ReportButton:SetShown(not on)
+    if on and win.Copy:IsShown() then self:ShowReport(false) end
 end
 
 -- The report to copy and paste, or back to the stats
