@@ -3,7 +3,7 @@ Craftseeker is a reagent and recipe browser for WoW: Forever, laid out like the 
 
 Alt+Click any item to see every recipe it goes into, how to learn each one, and where to get it.
 
-<img width="1031" height="775" alt="image" src="https://github.com/user-attachments/assets/7533968a-84de-4faf-aeec-1d68082ed020" />
+<img alt="Start page with tracked recipes, shopping list and reagents" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/start-page.webp" />
 
 ---
 What it shows:
@@ -21,23 +21,31 @@ What it shows:
 - Shopping list for tracked recipes
 - Map pins, TomTom too
 
-<img width="1031" height="778" alt="image" src="https://github.com/user-attachments/assets/d869eef9-2a24-4be4-a0f3-d5f7a056ee1f" />
+<img alt="A recipe with its reagents, trainers and where to get a reagent" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/item-page.webp" />
+
+<img alt="Reagent counts on this character and its alts" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/alt-counts.webp" />
 
 ---
 
 The start page lists your favorite and tracked recipes, then the reagents in your bags and bank. Search for any item or recipe and narrow the lists with the Filter button. Sort source tables by clicking a column title, or limit them to your zone or creatures near your level. Hide any profession or class in the settings.
 
-<img width="1041" height="781" alt="image" src="https://github.com/user-attachments/assets/bddf3152-b3a0-4453-8c48-45ad25e8186d" />
+<img alt="Shopping list with the cheapest vendor" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/shopping-list.webp" />
+
+<img alt="Filter menu with source and slot filters" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/filter-menu.webp" />
+
+<img alt="A pattern's page with what it teaches and who sells it" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/recipe-item-page.webp" />
 
 ---
 
 Drop rates improve as you play. Every loot, gathered node and catch is counted and shared with other Craftseeker users online. It also reads the counts Drop Tables and Forever Drops users share.
 
-<img width="272" height="123" alt="image" src="https://github.com/user-attachments/assets/af5c168e-70e4-47ed-8814-5c8a6236b73f" />
+<img alt="Drop rates by creature and the containers a reagent comes from" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/source-tables.webp" />
+
+<img alt="Zones a fish is caught in" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/fishing-zones.webp" />
 
 Reagents in your bags and bank get one tooltip line saying how many recipes use them.
 
-<img width="283" height="177" alt="image" src="https://github.com/user-attachments/assets/e3354add-ab24-40c7-8866-3acfc5ea3d33" />
+<img alt="The one line Craftseeker adds to a reagent's tooltip" src="https://raw.githubusercontent.com/Dreambjorn/Craftseeker/main/.github/images/tooltip.webp" />
 
 ---
 
