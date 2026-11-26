@@ -21,6 +21,8 @@ local wasPage    -- the item page was up before this redraw
 local restoring  -- Back or Forward redraws a page as it was left
 local collapsed = {} -- [section title] = true, kept for the session
 local expanded = {}  -- [table] = true: shown in full, until another recipe is picked
+local listedAll = {} -- [section or category key] = true: its list rows shown in full, until a new lookup
+local LIST_ROWS = 25 -- list rows a section or category shows before its "Show all" row
 local madeView       -- the list shows the recipes that make currentItem, not those that use it
 local picking        -- search results with recipes in them: the first one is shown on the right
 local AddSkill
@@ -120,6 +122,10 @@ local function IsSelected(row)
 end
 
 local function OnRowClick(self, button)
+    if self.more then
+        listedAll[self.more] = true
+        return Render(true)
+    end
     if self.page and button ~= "RightButton" and not IsShiftKeyDown() then
         itemPage, selectedRecipe = true, nil
         scrollBox:ForEachFrame(function(frame)
@@ -208,6 +214,7 @@ local function InitRow(row, data)
     end
     row.itemID, row.lookup, row.recipeID, row.spellID, row.page = data.itemID, data.lookup, data.recipeID, data.spellID,
         data.page == true
+    row.more = data.more
     row.cheapest = data.cheapest or false
     row.Label:SetText(data.left or "")
     row.Right:SetText(data.right or "")
@@ -226,7 +233,7 @@ local function InitRow(row, data)
         row.Label:SetPoint("LEFT", 21, 0)
     end
     row.Selected:SetShown(IsSelected(row))
-    row.Highlight:SetShown(data.recipeID ~= nil or data.lookup ~= nil or data.page ~= nil)
+    row.Highlight:SetShown(data.recipeID ~= nil or data.lookup ~= nil or data.page ~= nil or data.more ~= nil)
 end
 
 local function InitHeader(button, data)
@@ -1985,9 +1992,38 @@ local function BuildView(query)
     return PickerView(hits, uses, items, profs, recipes, query)
 end
 
+-- Each section or category lists LIST_ROWS rows, then a "Show all" row; the selected recipe stays listed
+local function Trim(list)
+    local out, key, n, held = {}, "", 0, 0 -- "": rows before any header, as a search of one kind has
+    local function Close()
+        if held > 0 then out[#out + 1] = { more = key, left = GOLD .. ("Show all %d|r"):format(n) } end
+        n, held = 0, 0
+    end
+    for _, e in ipairs(list) do
+        if e.header or e.divider or e.spacer then
+            Close()
+            if e.header or e.divider then key = e.key end
+            out[#out + 1] = e
+        elseif e.page then
+            out[#out + 1] = e
+        else
+            n = n + 1
+            if n <= LIST_ROWS or listedAll[key] or (e.recipeID and e.recipeID == selectedRecipe) then
+                out[#out + 1] = e
+            else
+                held = held + 1
+            end
+        end
+    end
+    Close()
+    return out
+end
+
 function Render(keepScroll)
     renderKeep = keepScroll
+    if not keepScroll and not restoring then wipe(listedAll) end
     local list, message = BuildView(currentQuery)
+    if list then list = Trim(list) end
     if not currentItem and not picking and not ((keepScroll or restoring) and homeKeep) then selectedRecipe = nil end
     scrollBox:SetDataProvider(CreateDataProvider(list or {}),
         keepScroll and ScrollBoxConstants.RetainScrollPosition or ScrollBoxConstants.DiscardScrollPosition)
