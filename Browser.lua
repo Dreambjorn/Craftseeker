@@ -54,12 +54,13 @@ local function ShowItemTooltip(self)
             GameTooltip:AddLine("Not seen on WoW: Forever yet; it may not be in the game", 0.6, 0.6, 0.6, true)
         end
     elseif self.itemID then
-        local have, _, bank = CS:ItemCounts(self.itemID)
+        local have, alts, bank = CS:ItemCounts(self.itemID)
         if bank > 0 then
             local bags = have - bank
             GameTooltip:AddLine(bags > 0 and ("%d in your bags, %d in your bank"):format(bags, bank)
                 or ("%d in your bank"):format(bank), 0.8, 0.8, 0.8)
         end
+        for _, a in ipairs(alts) do GameTooltip:AddDoubleLine(a[1], a[2], 0.4, 0.73, 1, 0.8, 0.8, 0.8) end
         if self.cheapest then GameTooltip:AddLine(self.cheapest, 1, 0.82, 0, true) end
         if CS:GetMakers(self.itemID) then GameTooltip_AddInstructionLine(GameTooltip, "Right-click to see how it's made") end
     end
@@ -1289,10 +1290,13 @@ function AddReagents(rec)
             .. (id == currentItem and (GOLD .. name .. "|r") or name)
         -- only when the bags alone fall short: then a bank trip comes before the craft
         if bank > 0 and have - bank < qty then label = label .. "\n" .. GREY .. bank .. " in your bank|r" end
-        if #alts > 0 then
-            local parts = {}
-            for k = 1, math.min(3, #alts) do parts[k] = alts[k][1] .. " " .. alts[k][2] end
-            label = label .. "\n" .. GREY .. "Alts: " .. table.concat(parts, ", ") .. (#alts > 3 and ", ..." or "") .. "|r"
+        -- one alt by name; several as a total, which the slot's tooltip breaks down
+        if #alts == 1 then
+            label = label .. "\n" .. GREY .. "Alts: " .. alts[1][1] .. " " .. alts[1][2] .. "|r"
+        elseif #alts > 1 then
+            local total = 0
+            for _, a in ipairs(alts) do total = total + a[2] end
+            label = label .. "\n" .. GREY .. ("Alts: %d on %d characters|r"):format(total, #alts)
         end
         local slot = AddSlot(id, nil, label)
         slot.Text:SetMaxLines(3)
